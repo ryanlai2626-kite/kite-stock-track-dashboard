@@ -340,7 +340,7 @@ def show_dashboard():
     chart_df = df.copy(); chart_df['date_dt'] = pd.to_datetime(chart_df['date']); chart_df = chart_df.sort_values('date_dt', ascending=True)
     chart_df['Month'] = chart_df['date_dt'].dt.strftime('%Y-%m')
 
-    tab1, tab2, tab3 = st.tabs(["📈 風箏數量 (分組柱狀圖)", "🌬️ 每日風度分佈", "📅 月度風度統計 (分組柱狀圖)"])
+    tab1, tab2, tab3 = st.tabs(["📈 風箏數量", "🌬️ 每日風度分佈", "📅 每月風度統計"])
     
     # 圖表 RWD 設定
     axis_config = alt.Axis(labelFontSize=16, titleFontSize=20, labelColor='#333333', titleColor='#333333', labelFontWeight='bold', grid=True, gridColor='#E0E0E0')
@@ -503,4 +503,5 @@ def main():
     elif page == "⚙️ 資料管理後台": show_admin_panel()
 
 if __name__ == "__main__":
+
     main()
