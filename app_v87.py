@@ -209,7 +209,7 @@ def save_full_history(df_to_save):
 def clear_db():
     if os.path.exists(DB_FILE): os.remove(DB_FILE)
 
-# 【新增】計算風向持續天數
+    # 【新增】計算風向持續天數
 def calculate_wind_streak(df, current_date_str):
     if df.empty: return 0
     
@@ -588,3 +588,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
