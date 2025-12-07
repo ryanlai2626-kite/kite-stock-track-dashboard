@@ -113,8 +113,8 @@ st.markdown("""
     button[data-baseweb="tab"][aria-selected="true"] { background-color: #e3f2fd !important; border-bottom: 4px solid #3498db !important; }
     
     /* 9. 下拉選單 */
-    [data-testid="stSelectbox"] label { font-size: 20px !important; color: #333333 !important; font-weight: bold !important; }
-    [data-baseweb="select"] div { font-size: 18px !important; color: #333333 !important; background-color: #FFFFFF !important; }
+    [data-testid="stSelectbox"] label { font-size: 20px !important; color: #f7f7f7 !important; font-weight: bold !important; }
+    [data-baseweb="select"] div { font-size: 18px !important; color: #f7f7f7 !important; background-color: #FFFFFF !important; }
 
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
 </style>
@@ -600,5 +600,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
