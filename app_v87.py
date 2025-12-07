@@ -153,9 +153,11 @@ generation_config = {
     "response_schema": list[DailyRecord],
 }
 
+# 【重要修正】嘗試使用更精確的模型名稱
 if GOOGLE_API_KEY:
+    model_name_to_use = "gemini-1.5-flash-latest" # 若此名稱仍失敗，請使用後台的「列出所有模型」功能查看
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash", # 【已修正】改回 1.5-flash 避免額度不足錯誤
+        model_name=model_name_to_use,
         generation_config=generation_config,
     )
 
@@ -209,7 +211,7 @@ def save_full_history(df_to_save):
 def clear_db():
     if os.path.exists(DB_FILE): os.remove(DB_FILE)
 
-    # 【新增】計算風向持續天數
+# 【新增】計算風向持續天數
 def calculate_wind_streak(df, current_date_str):
     if df.empty: return 0
     
@@ -448,6 +450,20 @@ def show_admin_panel():
     st.title("⚙️ 資料管理後台")
     if not GOOGLE_API_KEY: st.error("❌ 未設定 API Key"); return
 
+    # --- 🛠️ 新增功能：模型診斷工具 ---
+    with st.expander("🛠️ API 診斷工具 (若遇到 404 Error 請按此)"):
+        if st.button("🔍 列出所有可用模型"):
+            try:
+                models = genai.list_models()
+                st.write("您的 API Key 可存取以下模型：")
+                for m in models:
+                    if 'generateContent' in m.supported_generation_methods:
+                        st.code(m.name)
+                st.info("請將上述列表中，支援 vision/flash 的模型名稱 (例如 `models/gemini-1.5-flash-latest`) 填入程式碼中的 `model_name`。")
+            except Exception as e:
+                st.error(f"查詢失敗: {e}")
+    # -------------------------------------
+
     st.subheader("📥 新增/更新資料")
     uploaded_file = st.file_uploader("上傳截圖", type=["png", "jpg", "jpeg"])
     if 'preview_df' not in st.session_state: st.session_state.preview_df = None
@@ -588,4 +604,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
