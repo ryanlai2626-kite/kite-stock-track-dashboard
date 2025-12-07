@@ -1,4 +1,4 @@
-import streamlit as st
+    import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 import pandas as pd
@@ -197,6 +197,32 @@ def save_full_history(df_to_save):
 def clear_db():
     if os.path.exists(DB_FILE): os.remove(DB_FILE)
 
+# 【新增】計算風向持續天數
+def calculate_wind_streak(df, current_date_str):
+    if df.empty: return 0
+    
+    # 確保按日期倒序排列 (舊的在下面，新的在上面，方便我們找過去)
+    # 我們需要找「小於等於」選定日期的資料
+    past_df = df[df['date'] <= current_date_str].copy()
+    
+    if past_df.empty: return 0
+    
+    # 排序：日期由新到舊 (Index 0 是當前選的日期)
+    past_df = past_df.sort_values('date', ascending=False).reset_index(drop=True)
+    
+    def clean_wind(w): return str(w).replace("(CB)", "").strip()
+    
+    current_wind = clean_wind(past_df.iloc[0]['wind'])
+    streak = 1
+    
+    # 往回數 (Index 1, 2, 3...)
+    for i in range(1, len(past_df)):
+        prev_wind = clean_wind(past_df.iloc[i]['wind'])
+        if prev_wind == current_wind:
+            streak += 1
+        else:
+            break
+    return streak
 def ai_analyze_v86(image):
     prompt = """
     你是一個精準的表格座標讀取器。請分析圖片中的每一行，回傳 JSON Array。
@@ -298,10 +324,17 @@ def show_dashboard():
 
     c1, c2, c3, c4 = st.columns(4)
     wind_status = day_data['wind']; wind_color = "#2ecc71"
+    # 【新增】計算風向持續天數並顯示
+    wind_streak = calculate_wind_streak(df, selected_date)
+    streak_text = f"已持續 {wind_streak} 天"
+
     if "強" in str(wind_status): wind_color = "#e74c3c"
     elif "亂" in str(wind_status): wind_color = "#9b59b6"
     elif "陣" in str(wind_status): wind_color = "#f1c40f"
-    render_metric_card(c1, "今日風向", wind_status, wind_color)
+    
+    # 傳入 sub_value
+    render_metric_card(c1, "今日風向", wind_status, wind_color, sub_value=streak_text)
+
     render_metric_card(c2, "🪁 打工型風箏", day_data['part_time_count'], "#f39c12")
     render_metric_card(c3, "💪 上班族強勢週", day_data['worker_strong_count'], "#3498db")
     render_metric_card(c4, "📈 上班族週趨勢", day_data['worker_trend_count'], "#9b59b6")
@@ -498,6 +531,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
