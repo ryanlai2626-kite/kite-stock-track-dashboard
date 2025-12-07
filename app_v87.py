@@ -16,8 +16,8 @@ try:
 except ImportError:
     from typing import TypedDict
 
-# --- 1. 頁面與 CSS (V74: 導航回歸 + 標題白字修復 + 卡片高度修正) ---
-st.set_page_config(layout="wide", page_title="StockTrack V74 Fixed", page_icon="🛠️")
+# --- 1. 頁面與 CSS (V74: 導航回歸 + 標題白字修復 + 高度修正) ---
+st.set_page_config(layout="wide", page_title="StockTrack V74+Fix", page_icon="🛠️")
 
 st.markdown("""
 <style>
@@ -49,10 +49,10 @@ st.markdown("""
         box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center;
         border: 1px solid #E0E0E0; border-top: 6px solid #3498db;
         
-        /* 強制最小高度，確保整排對齊 */
-        min-height: 180px;
+	/* 【關鍵】強制固定高度，確保四張卡片一樣大 */
+        height: 220px !important;
         
-        /* 彈性排版，讓內容垂直置中 */
+        /* 【修正】彈性排版，讓內容垂直置中 */
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -208,24 +208,25 @@ def save_full_history(df_to_save):
 def clear_db():
     if os.path.exists(DB_FILE): os.remove(DB_FILE)
 
+# 【核心修正】計算風向持續天數 (正確的回溯邏輯)
 def calculate_wind_streak(df, current_date_str):
     if df.empty: return 0
     
-    # 確保按日期倒序排列 (舊的在下面，新的在上面，方便我們找過去)
-    # 我們需要找「小於等於」選定日期的資料
+    # 1. 篩選出「小於等於」當前日期的資料
     past_df = df[df['date'] <= current_date_str].copy()
     
-    # 排序：日期由新到舊 (Index 0 是當前選的日期)
+    # 2. 排序：由新到舊 (Index 0 = 當前選取的日期)
     past_df = past_df.sort_values('date', ascending=False).reset_index(drop=True)
     
     if past_df.empty: return 0
     
+    # 清理函數：移除標記與空白
     def clean_wind(w): return str(w).replace("(CB)", "").strip()
     
     current_wind = clean_wind(past_df.iloc[0]['wind'])
     streak = 1
     
-    # 往回數 (Index 1, 2, 3...)
+    # 3. 往回檢查 (從 Index 1 開始，也就是前一天)
     for i in range(1, len(past_df)):
         prev_wind = clean_wind(past_df.iloc[i]['wind'])
         if prev_wind == current_wind:
@@ -352,6 +353,7 @@ def show_dashboard():
     elif "亂" in str(wind_status): wind_color = "#9b59b6"
     elif "陣" in str(wind_status): wind_color = "#f1c40f"
     
+    # 傳入 sub_value
     render_metric_card(c1, "今日風向", wind_status, wind_color, sub_value=streak_text)
     
     render_metric_card(c2, "🪁 打工型風箏", day_data['part_time_count'], "#f39c12")
@@ -418,7 +420,6 @@ def show_dashboard():
 
     st.markdown("---")
     st.header("🏆 策略選股月度風雲榜")
-    st.caption("統計各策略下，股票出現的次數。")
     stats_df = calculate_monthly_stats(df)
     if not stats_df.empty:
         month_list = stats_df['Month'].unique()
@@ -453,27 +454,27 @@ def show_admin_panel():
         with st.spinner("AI 解析中..."):
             img = Image.open(uploaded_file)
             try:
-                # 【關鍵修正】防止 AttributeError: 'str' object has no attribute 'get'
+                # 【修正】呼叫正確的函式 ai_analyze_v86
                 json_text = ai_analyze_v86(img)
                 
-                # 檢查回傳的是不是錯誤字串
+                # 【關鍵防護】檢查是否回傳了 Error String
                 if isinstance(json_text, str) and "error" in json_text and "{" in json_text:
-                     try:
+                    try:
                         err_obj = json.loads(json_text)
                         if "error" in err_obj:
                              st.error(f"API 回傳錯誤: {err_obj['error']}")
                              st.stop()
-                     except: pass
+                    except: pass
                 
                 raw_data = json.loads(json_text)
                 
                 # 【修正：確保 raw_data 是列表】
                 if isinstance(raw_data, dict): 
-                    raw_data = [raw_data] # 如果 AI 只回傳一個物件，把它包成列表
+                    raw_data = [raw_data]
 
                 processed_list = []
                 for item in raw_data:
-                    # 再次確認 item 是字典
+                    # 確保 item 是字典
                     if not isinstance(item, dict): continue
 
                     def merge_keys(prefix, count):
@@ -540,26 +541,16 @@ def main():
     if 'is_admin' not in st.session_state: st.session_state.is_admin = False
 
     options = ["📊 戰情儀表板"]
-    
     if not st.session_state.is_admin:
         with st.sidebar.expander("管理員登入"):
             pwd = st.text_input("密碼", type="password")
-            if pwd == "8899abc168": 
-                st.session_state.is_admin = True
-                st.rerun()
-    
+            if pwd == "8899abc168": st.session_state.is_admin = True; st.rerun()
     if st.session_state.is_admin:
         options.append("⚙️ 資料管理後台")
-        if st.sidebar.button("登出"):
-            st.session_state.is_admin = False
-            st.rerun()
-
+        if st.sidebar.button("登出"): st.session_state.is_admin = False; st.rerun()
     page = st.sidebar.radio("前往", options)
-    
-    if page == "📊 戰情儀表板":
-        show_dashboard()
-    elif page == "⚙️ 資料管理後台":
-        show_admin_panel()
+    if page == "📊 戰情儀表板": show_dashboard()
+    elif page == "⚙️ 資料管理後台": show_admin_panel()
 
 if __name__ == "__main__":
     main()
