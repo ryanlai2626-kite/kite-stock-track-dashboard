@@ -165,7 +165,7 @@ generation_config = {
 
 # 預設使用 gemini-1.5-flash，若有問題可透過後台查詢
 if GOOGLE_API_KEY:
-    model_name_to_use = "gemini-1.5-flash"
+    model_name_to_use = "gemini-2.0-flash"
     model = genai.GenerativeModel(
         model_name=model_name_to_use,
         generation_config=generation_config,
@@ -600,4 +600,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
