@@ -125,7 +125,7 @@ try:
     if "GOOGLE_API_KEY" in st.secrets:
         GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     else:
-        GOOGLE_API_KEY = "AIzaSyCNYk70ekW1Zz4PQaGWhIZtupbxhB7VHhQ" 
+        GOOGLE_API_KEY = "請輸入自己的API KEY" 
 except:
     GOOGLE_API_KEY = ""
 
@@ -600,3 +600,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
