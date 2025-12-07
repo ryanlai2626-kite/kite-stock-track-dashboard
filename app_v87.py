@@ -16,18 +16,24 @@ try:
 except ImportError:
     from typing import TypedDict
 
-# --- 1. 頁面設定 ---
-st.set_page_config(layout="wide", page_title="StockTrack V87 全裝置適配版", page_icon="📱")
+# --- 1. 頁面與 CSS (V74: 導航回歸 + 標題白字修復) ---
+st.set_page_config(layout="wide", page_title="StockTrack V74 完整修復版", page_icon="🛠️")
 
 st.markdown("""
 <style>
-    /* === 全域設定 === */
-    .stApp { background-color: #FFFFFF !important; color: #333333 !important; font-family: 'Helvetica', 'Arial', sans-serif; }
-    h1, h2, h3, h4, h5, h6, p, div, span, label, li { color: #333333 !important; }
+    /* 1. 全域背景 (淺灰藍) 與深色文字 */
+    .stApp {
+        background-color: #F4F6F9 !important;
+        color: #333333 !important;
+        font-family: 'Helvetica', 'Arial', sans-serif;
+    }
     
-    /* === 電腦版預設樣式 (大字體) === */
-    
-    /* 頂部標題 */
+    /* 2. 一般標題與文字強制深色 */
+    h1, h2, h3, h4, h5, h6, p, div, span, label, li {
+        color: #333333;
+    }
+
+    /* 3. 頂部標題區 (深色底，白字) */
     .title-box {
         background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
         padding: 30px; border-radius: 15px; margin-bottom: 25px; text-align: center;
@@ -36,79 +42,57 @@ st.markdown("""
     .title-box h1 { color: #FFFFFF !important; font-size: 40px !important; }
     .title-box p { color: #EEEEEE !important; font-size: 20px !important; }
 
-    /* 數據卡片 */
+    /* 4. 數據卡片 */
     div.metric-container {
-        background-color: #FFFFFF !important; border-radius: 12px; padding: 25px;
+        background-color: #FFFFFF !important; 
+        border-radius: 12px; padding: 25px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center;
         border: 1px solid #E0E0E0; border-top: 6px solid #3498db;
     }
     .metric-value { font-size: 3.5rem !important; font-weight: 800; color: #2c3e50 !important; }
     .metric-label { font-size: 1.6rem !important; color: #555555 !important; font-weight: 700; }
 
-    /* 策略橫幅 */
+    /* 5. 策略橫幅 (容器) */
     .strategy-banner {
-        padding: 15px 25px; border-radius: 8px; margin-top: 35px; margin-bottom: 20px; display: flex; align-items: center;
+        padding: 15px 25px; border-radius: 8px; 
+        margin-top: 35px; margin-bottom: 20px; display: flex; align-items: center;
         box-shadow: 0 3px 6px rgba(0,0,0,0.15);
     }
-    .banner-text { color: #FFFFFF !important; font-size: 24px !important; font-weight: 800 !important; margin: 0 !important; }
+    /* 【修正】策略橫幅內的文字：強制白色 */
+    .banner-text {
+        color: #FFFFFF !important;
+        font-size: 24px !important;
+        font-weight: 800 !important;
+        margin: 0 !important;
+    }
     
     .worker-banner { background: linear-gradient(90deg, #2980b9, #3498db); }
     .boss-banner { background: linear-gradient(90deg, #c0392b, #e74c3c); }
     .revenue-banner { background: linear-gradient(90deg, #d35400, #e67e22); }
 
-    /* 股票標籤 */
+    /* 6. 股票標籤 */
     .stock-tag {
         display: inline-block; background-color: #FFFFFF; color: #2c3e50 !important;
-        border: 2px solid #bdc3c7; padding: 12px 24px; margin: 10px;
+        border: 3px solid #bdc3c7; padding: 12px 24px; margin: 10px;
         border-radius: 10px; font-weight: 800; font-size: 1.8rem;
         box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
     .stock-tag-cb { background-color: #fff8e1; border-color: #f1c40f; color: #d35400 !important; }
     .cb-badge { background-color: #e67e22; color: #FFFFFF !important; font-size: 0.7em; padding: 3px 8px; border-radius: 4px; margin-left: 10px; vertical-align: middle; }
-
-    /* 表格與元件 */
+    
+    /* 7. 表格優化 */
     .stDataFrame table { text-align: center !important; }
     .stDataFrame th { font-size: 22px !important; color: #000000 !important; background-color: #E6E9EF !important; text-align: center !important; font-weight: 900 !important; }
     .stDataFrame td { font-size: 20px !important; color: #333333 !important; background-color: #FFFFFF !important; text-align: center !important; }
-    
+
+    /* 8. 分頁標籤 */
+    button[data-baseweb="tab"] { background-color: #FFFFFF !important; border: 1px solid #ddd !important; }
     button[data-baseweb="tab"] div p { color: #333333 !important; font-size: 20px !important; font-weight: 800 !important; }
+    button[data-baseweb="tab"][aria-selected="true"] { background-color: #e3f2fd !important; border-bottom: 4px solid #3498db !important; }
+    
+    /* 9. 下拉選單 */
     [data-testid="stSelectbox"] label { font-size: 20px !important; color: #333333 !important; font-weight: bold !important; }
     [data-baseweb="select"] div { font-size: 18px !important; color: #333333 !important; background-color: #FFFFFF !important; }
-
-    /* === 📱 手機版適配 (螢幕寬度小於 768px) === */
-    @media only screen and (max-width: 768px) {
-        /* 縮小標題 */
-        .title-box h1 { font-size: 28px !important; }
-        .title-box p { font-size: 16px !important; }
-        
-        /* 縮小數據卡片字體 */
-        .metric-value { font-size: 2.5rem !important; }
-        .metric-label { font-size: 1.2rem !important; }
-        div.metric-container { padding: 15px !important; margin-bottom: 10px !important; }
-        
-        /* 縮小策略橫幅 */
-        .strategy-banner { padding: 10px 15px !important; margin-top: 20px !important; }
-        .banner-text { font-size: 18px !important; }
-        
-        /* 縮小股票標籤，避免一行塞不下 */
-        .stock-tag { 
-            font-size: 1.2rem !important; 
-            padding: 8px 12px !important; 
-            margin: 5px !important; 
-            display: block !important; /* 手機上強制換行，避免擠在一起 */
-            width: 100% !important;
-            text-align: center !important;
-        }
-        
-        /* 縮小表格字體 */
-        .stDataFrame th { font-size: 16px !important; }
-        .stDataFrame td { font-size: 14px !important; }
-        
-        /* 縮小分頁與選單 */
-        button[data-baseweb="tab"] div p { font-size: 16px !important; }
-        [data-testid="stSelectbox"] label { font-size: 16px !important; }
-        [data-baseweb="select"] div { font-size: 16px !important; }
-    }
 
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
 </style>
@@ -296,18 +280,18 @@ def render_stock_tags(stock_str):
         else: html += f"<div class='stock-tag'>{s}</div>"
     return html
 
-# --- 5. 頁面顯示邏輯 ---
+# --- 5. 頁面視圖：戰情儀表板 (前台) ---
 def show_dashboard():
     df = load_db()
     if df.empty:
-        st.info("👋 資料庫目前為空。請至後台新增。")
+        st.info("👋 目前無資料。請至後台新增。")
         return
 
     all_dates = df['date'].unique()
     st.sidebar.divider(); st.sidebar.header("📅 歷史回顧")
     selected_date = st.sidebar.selectbox("選擇日期", options=all_dates, index=0)
     day_df = df[df['date'] == selected_date]
-    if day_df.empty: st.error("日期資料讀取錯誤"); return
+    if day_df.empty: st.error("日期讀取錯誤"); return
     day_data = day_df.iloc[0]
 
     st.markdown(f"""<div class="title-box"><h1 style='margin:0; font-size: 2.8rem;'>📅 {selected_date} 市場戰情室</h1><p style='margin-top:10px; opacity:0.9;'>資料更新於: {day_data['last_updated']}</p></div>""", unsafe_allow_html=True)
@@ -322,6 +306,7 @@ def show_dashboard():
     render_metric_card(c3, "💪 上班族強勢週", day_data['worker_strong_count'], "#3498db")
     render_metric_card(c4, "📈 上班族週趨勢", day_data['worker_trend_count'], "#9b59b6")
 
+    # 【修正】使用 .banner-text 確保白色
     st.markdown('<div class="strategy-banner worker-banner"><p class="banner-text">👨‍💼 上班族策略 (Worker Strategy)</p></div>', unsafe_allow_html=True)
     w1, w2 = st.columns(2)
     with w1: st.markdown("### 🚀 強勢週 TOP 3"); st.markdown(render_stock_tags(day_data['worker_strong_list']), unsafe_allow_html=True)
@@ -340,9 +325,8 @@ def show_dashboard():
     chart_df = df.copy(); chart_df['date_dt'] = pd.to_datetime(chart_df['date']); chart_df = chart_df.sort_values('date_dt', ascending=True)
     chart_df['Month'] = chart_df['date_dt'].dt.strftime('%Y-%m')
 
-    tab1, tab2, tab3 = st.tabs(["📈 風箏數量 (分組柱狀圖)", "🌬️ 每日風度分佈", "📅 月度風度統計 (分組柱狀圖)"])
+    tab1, tab2, tab3 = st.tabs(["📈 風箏數量", "🌬️ 每日風度分佈", "📅 每月風度統計"])
     
-    # 圖表 RWD 設定
     axis_config = alt.Axis(labelFontSize=16, titleFontSize=20, labelColor='#333333', titleColor='#333333', labelFontWeight='bold', grid=True, gridColor='#E0E0E0')
     legend_config = alt.Legend(orient='top', labelFontSize=16, titleFontSize=20, labelColor='#333333', titleColor='#333333')
 
@@ -382,6 +366,7 @@ def show_dashboard():
 
     st.markdown("---")
     st.header("🏆 策略選股月度風雲榜")
+    st.caption("統計各策略下，股票出現的次數。")
     stats_df = calculate_monthly_stats(df)
     if not stats_df.empty:
         month_list = stats_df['Month'].unique()
@@ -403,7 +388,7 @@ def show_dashboard():
                                  column_config={"stock": "股票名稱", "Count": st.column_config.ProgressColumn("出現次數", format="%d次", min_value=0, max_value=int(strat_data['Count'].max()) if not strat_data.empty else 1)})
     else: st.info("累積足夠資料後，將在此顯示統計排行。")
 
-# --- 6. 後台 ---
+# --- 6. 頁面視圖：管理後台 (後台) ---
 def show_admin_panel():
     st.title("⚙️ 資料管理後台")
     if not GOOGLE_API_KEY: st.error("❌ 未設定 API Key"); return
@@ -489,18 +474,28 @@ def main():
     if 'is_admin' not in st.session_state: st.session_state.is_admin = False
 
     options = ["📊 戰情儀表板"]
+    
+    # 密碼邏輯
     if not st.session_state.is_admin:
         with st.sidebar.expander("管理員登入"):
             pwd = st.text_input("密碼", type="password")
-            if pwd == "8899abc168": st.session_state.is_admin = True; st.rerun()
+            if pwd == "8899abc168": 
+                st.session_state.is_admin = True
+                st.rerun()
     
     if st.session_state.is_admin:
         options.append("⚙️ 資料管理後台")
-        if st.sidebar.button("登出"): st.session_state.is_admin = False; st.rerun()
+        if st.sidebar.button("登出"):
+            st.session_state.is_admin = False
+            st.rerun()
 
     page = st.sidebar.radio("前往", options)
-    if page == "📊 戰情儀表板": show_dashboard()
-    elif page == "⚙️ 資料管理後台": show_admin_panel()
+    
+    if page == "📊 戰情儀表板":
+        show_dashboard()
+    elif page == "⚙️ 資料管理後台":
+        show_admin_panel()
 
 if __name__ == "__main__":
     main()
+
