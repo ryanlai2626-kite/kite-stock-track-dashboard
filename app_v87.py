@@ -16,8 +16,8 @@ try:
 except ImportError:
     from typing import TypedDict
 
-# --- 1. 頁面與 CSS (V75: 響應式高度修正 + 導航 + 標題白字) ---
-st.set_page_config(layout="wide", page_title="StockTrack V75+MobileFix", page_icon="🛠️")
+# --- 1. 頁面與 CSS (V77: 下拉選單字體顏色終極修正) ---
+st.set_page_config(layout="wide", page_title="StockTrack V77+MenuFix", page_icon="🛠️")
 
 st.markdown("""
 <style>
@@ -42,20 +42,19 @@ st.markdown("""
     .title-box h1 { color: #FFFFFF !important; font-size: 40px !important; }
     .title-box p { color: #EEEEEE !important; font-size: 20px !important; }
 
-    /* --- 4. 數據卡片 (V75更新：響應式設計) --- */
+    /* --- 4. 數據卡片 (響應式設計) --- */
     div.metric-container {
         background-color: #FFFFFF !important; 
         border-radius: 12px; padding: 15px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center;
         border: 1px solid #E0E0E0; border-top: 6px solid #3498db;
         
-        /* 彈性排版，讓內容垂直置中 */
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
         
-        /* 【電腦版預設】固定高度確保整齊 */
+        /* 電腦版預設高度 */
         height: 220px !important;
     }
 
@@ -63,24 +62,23 @@ st.markdown("""
     .metric-label { font-size: 1.6rem !important; color: #555555 !important; font-weight: 700; }
     .metric-sub { font-size: 1.2rem !important; color: #888888 !important; font-weight: bold; margin-top: 5px; }
 
-    /* 【手機/平板優化】當螢幕寬度小於 900px 時 (包含手機橫向)，改為自動高度 */
+    /* 手機版優化 */
     @media (max-width: 900px) {
         div.metric-container {
-            height: auto !important;     /* 取消固定高度，避免跑版 */
-            min-height: 180px !important; /* 設定最小高度維持份量感 */
+            height: auto !important;
+            min-height: 180px !important;
             padding: 10px !important;
         }
-        .metric-value { font-size: 2.5rem !important; } /* 字體縮小一點 */
+        .metric-value { font-size: 2.5rem !important; }
         .metric-label { font-size: 1.3rem !important; }
     }
 
-    /* 5. 策略橫幅 (容器) */
+    /* 5. 策略橫幅 */
     .strategy-banner {
         padding: 15px 25px; border-radius: 8px; 
         margin-top: 35px; margin-bottom: 20px; display: flex; align-items: center;
         box-shadow: 0 3px 6px rgba(0,0,0,0.15);
     }
-    /* 【修正】策略橫幅內的文字：強制白色 */
     .banner-text {
         color: #FFFFFF !important;
         font-size: 24px !important;
@@ -112,9 +110,57 @@ st.markdown("""
     button[data-baseweb="tab"] div p { color: #333333 !important; font-size: 20px !important; font-weight: 800 !important; }
     button[data-baseweb="tab"][aria-selected="true"] { background-color: #e3f2fd !important; border-bottom: 4px solid #3498db !important; }
     
-    /* 9. 下拉選單 */
-    [data-testid="stSelectbox"] label { font-size: 20px !important; color: #FFFFFF !important; font-weight: bold !important; }
-    [data-baseweb="select"] div { font-size: 18px !important; color: #FFFFFF !important; background-color: #333333 !important; }
+    /* --- 9. 下拉選單 (V77 終極修正：強制框內所有元素變白) --- */
+    
+    /* 1. 選單上方的標題文字 (例如 "選擇日期")：維持深色 */
+    .stSelectbox label {
+        font-size: 20px !important;
+        color: #333333 !important;
+        font-weight: bold !important;
+    }
+
+    /* 2. 選單框框本體 (背景深藍色) */
+    .stSelectbox div[data-baseweb="select"] > div {
+        background-color: #2c3e50 !important;
+        border-color: #2c3e50 !important;
+        color: white !important; /* 第一層設定白色 */
+    }
+
+    /* 3. 【關鍵修正】強制框框內「所有」層級的文字變成白色 */
+    /* 這會覆蓋掉 Streamlit 預設的灰色 */
+    .stSelectbox div[data-baseweb="select"] > div * {
+        color: #FFFFFF !important;
+    }
+
+    /* 4. 右側箭頭 SVG 圖示強制變白 */
+    .stSelectbox div[data-baseweb="select"] svg {
+        fill: #FFFFFF !important;
+        color: #FFFFFF !important;
+    }
+
+    /* 5. 展開後的下拉列表清單 */
+    ul[data-baseweb="menu"] {
+        background-color: #2c3e50 !important;
+    }
+    
+    /* 6. 列表中的選項文字 */
+    li[role="option"] {
+        color: #FFFFFF !important;
+    }
+
+    /* 7. 滑鼠滑過選項的效果 */
+    li[role="option"]:hover, li[role="option"][aria-selected="true"] {
+        background-color: #34495e !important;
+        color: #f1c40f !important; /* 選中時變黃色 */
+    }
+    
+    /* 修正展開列表內的文字顏色 (雙重保險) */
+    li[role="option"] div {
+        color: #FFFFFF !important;
+    }
+    li[role="option"]:hover div {
+        color: #f1c40f !important;
+    }
 
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
 </style>
@@ -125,7 +171,7 @@ try:
     if "GOOGLE_API_KEY" in st.secrets:
         GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     else:
-        GOOGLE_API_KEY = "請輸入自己的API KEY" 
+        GOOGLE_API_KEY = "AIzaSyCNYk70ekW1Zz4PQaGWhIZtupbxhB7VHhQ" 
 except:
     GOOGLE_API_KEY = ""
 
@@ -163,9 +209,9 @@ generation_config = {
     "response_schema": list[DailyRecord],
 }
 
-# 預設使用 gemini-1.5-flash，若有問題可透過後台查詢
 if GOOGLE_API_KEY:
-    model_name_to_use = "gemini-2.0-flash"
+    # 預設 gemini-1.5-flash，若有問題請用後台工具檢查
+    model_name_to_use = "gemini-1.5-flash"
     model = genai.GenerativeModel(
         model_name=model_name_to_use,
         generation_config=generation_config,
@@ -225,12 +271,9 @@ def clear_db():
 def calculate_wind_streak(df, current_date_str):
     if df.empty: return 0
     
-    # 確保按日期倒序排列
     past_df = df[df['date'] <= current_date_str].copy()
-    
     if past_df.empty: return 0
     
-    # 排序：日期由新到舊
     past_df = past_df.sort_values('date', ascending=False).reset_index(drop=True)
     
     def clean_wind(w): return str(w).replace("(CB)", "").strip()
@@ -316,7 +359,6 @@ def calculate_monthly_stats(df):
     final_df = final_df.sort_values(['Month', 'Strategy', 'Count'], ascending=[False, True, False])
     return final_df
 
-# 【修改】支援副標題顯示
 def render_metric_card(col, label, value, color_border="gray", sub_value=""):
     sub_html = f'<div class="metric-sub">{sub_value}</div>' if sub_value else ""
     col.markdown(f"""
@@ -455,7 +497,6 @@ def show_admin_panel():
     st.title("⚙️ 資料管理後台")
     if not GOOGLE_API_KEY: st.error("❌ 未設定 API Key"); return
 
-    # --- 🛠️ API 診斷工具 ---
     with st.expander("🛠️ API 診斷工具 (若遇到 404 Error 請按此)"):
         if st.button("🔍 列出所有可用模型"):
             try:
@@ -467,7 +508,6 @@ def show_admin_panel():
                 st.info("請將上述列表中，支援 vision/flash 的模型名稱填入程式碼中的 `model_name`。")
             except Exception as e:
                 st.error(f"查詢失敗: {e}")
-    # -------------------------------------
 
     st.subheader("📥 新增/更新資料")
     uploaded_file = st.file_uploader("上傳截圖", type=["png", "jpg", "jpeg"])
@@ -481,17 +521,14 @@ def show_admin_panel():
                 if "error" in json_text and len(json_text) < 100: st.error(f"API 錯誤: {json_text}")
                 else:
                     raw_data = json.loads(json_text)
-
-                    # --- 🚨 API 錯誤檢查 ---
+                    
                     if isinstance(raw_data, dict) and "error" in raw_data:
                         error_msg = raw_data["error"]
                         st.error(f"⚠️ API 回傳錯誤: {error_msg}")
                         if "429" in str(error_msg) or "quota" in str(error_msg).lower():
                             st.warning("💡 提示：您的 API 免費額度暫時滿了。請等待 1 分鐘後再試。")
                         st.stop()
-                    # -------------------------------------
 
-                    # --- 🔎 V88 終極暴力搜索 ---
                     def find_valid_records(data):
                         found = []
                         if isinstance(data, list):
@@ -507,11 +544,9 @@ def show_admin_panel():
 
                     raw_data = find_valid_records(raw_data)
                     
-                    # --- 🐞 除錯資訊 ---
                     with st.expander("🕵️‍♂️ 開發者除錯資訊 (若資料空白請點我)"):
                         st.write("解析出的資料筆數:", len(raw_data))
                         st.write("原始 JSON 內容:", json.loads(json_text)) 
-                    # --------------------------------------------------
 
                     if not isinstance(raw_data, list):
                         raw_data = []
@@ -600,7 +635,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
