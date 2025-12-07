@@ -16,8 +16,8 @@ try:
 except ImportError:
     from typing import TypedDict
 
-# --- 1. 頁面與 CSS (V74: 導航回歸 + 標題白字修復 + 高度修正) ---
-st.set_page_config(layout="wide", page_title="StockTrack V74+Streak", page_icon="🛠️")
+# --- 1. 頁面與 CSS (V75: 響應式高度修正 + 導航 + 標題白字) ---
+st.set_page_config(layout="wide", page_title="StockTrack V75+MobileFix", page_icon="🛠️")
 
 st.markdown("""
 <style>
@@ -42,27 +42,37 @@ st.markdown("""
     .title-box h1 { color: #FFFFFF !important; font-size: 40px !important; }
     .title-box p { color: #EEEEEE !important; font-size: 20px !important; }
 
-    /* 4. 數據卡片 (關鍵修正：強制高度與置中) */
+    /* --- 4. 數據卡片 (V75更新：響應式設計) --- */
     div.metric-container {
         background-color: #FFFFFF !important; 
-        border-radius: 12px; padding: 25px;
+        border-radius: 12px; padding: 15px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center;
         border: 1px solid #E0E0E0; border-top: 6px solid #3498db;
-        
-    /* 【關鍵】強制固定高度，確保四張卡片一樣大 */
-        height: 220px !important;
         
         /* 彈性排版，讓內容垂直置中 */
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
+        
+        /* 【電腦版預設】固定高度確保整齊 */
+        height: 220px !important;
     }
+
     .metric-value { font-size: 3.5rem !important; font-weight: 800; color: #2c3e50 !important; margin: 10px 0; }
     .metric-label { font-size: 1.6rem !important; color: #555555 !important; font-weight: 700; }
-    
-    /* 副標題樣式 */
     .metric-sub { font-size: 1.2rem !important; color: #888888 !important; font-weight: bold; margin-top: 5px; }
+
+    /* 【手機/平板優化】當螢幕寬度小於 900px 時 (包含手機橫向)，改為自動高度 */
+    @media (max-width: 900px) {
+        div.metric-container {
+            height: auto !important;     /* 取消固定高度，避免跑版 */
+            min-height: 180px !important; /* 設定最小高度維持份量感 */
+            padding: 10px !important;
+        }
+        .metric-value { font-size: 2.5rem !important; } /* 字體縮小一點 */
+        .metric-label { font-size: 1.3rem !important; }
+    }
 
     /* 5. 策略橫幅 (容器) */
     .strategy-banner {
@@ -115,7 +125,7 @@ try:
     if "GOOGLE_API_KEY" in st.secrets:
         GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     else:
-        GOOGLE_API_KEY = "請輸入API KEY" 
+        GOOGLE_API_KEY = "AIzaSyCNYk70ekW1Zz4PQaGWhIZtupbxhB7VHhQ" 
 except:
     GOOGLE_API_KEY = ""
 
@@ -153,9 +163,9 @@ generation_config = {
     "response_schema": list[DailyRecord],
 }
 
-# 【重要修正】嘗試使用更精確的模型名稱
+# 預設使用 gemini-1.5-flash，若有問題可透過後台查詢
 if GOOGLE_API_KEY:
-    model_name_to_use = "gemini-2.0-flash" # 若此名稱仍失敗，請使用後台的「列出所有模型」功能查看
+    model_name_to_use = "gemini-1.5-flash"
     model = genai.GenerativeModel(
         model_name=model_name_to_use,
         generation_config=generation_config,
@@ -215,13 +225,12 @@ def clear_db():
 def calculate_wind_streak(df, current_date_str):
     if df.empty: return 0
     
-    # 確保按日期倒序排列 (舊的在下面，新的在上面，方便我們找過去)
-    # 我們需要找「小於等於」選定日期的資料
+    # 確保按日期倒序排列
     past_df = df[df['date'] <= current_date_str].copy()
     
     if past_df.empty: return 0
     
-    # 排序：日期由新到舊 (Index 0 是當前選的日期)
+    # 排序：日期由新到舊
     past_df = past_df.sort_values('date', ascending=False).reset_index(drop=True)
     
     def clean_wind(w): return str(w).replace("(CB)", "").strip()
@@ -229,7 +238,6 @@ def calculate_wind_streak(df, current_date_str):
     current_wind = clean_wind(past_df.iloc[0]['wind'])
     streak = 1
     
-    # 往回數 (Index 1, 2, 3...)
     for i in range(1, len(past_df)):
         prev_wind = clean_wind(past_df.iloc[i]['wind'])
         if prev_wind == current_wind:
@@ -348,7 +356,6 @@ def show_dashboard():
     c1, c2, c3, c4 = st.columns(4)
     wind_status = day_data['wind']; wind_color = "#2ecc71"
     
-    # 【新增】計算風向持續天數並顯示
     wind_streak = calculate_wind_streak(df, selected_date)
     streak_text = f"已持續 {wind_streak} 天"
 
@@ -356,14 +363,12 @@ def show_dashboard():
     elif "亂" in str(wind_status): wind_color = "#9b59b6"
     elif "陣" in str(wind_status): wind_color = "#f1c40f"
     
-    # 傳入 sub_value
     render_metric_card(c1, "今日風向", wind_status, wind_color, sub_value=streak_text)
     
     render_metric_card(c2, "🪁 打工型風箏", day_data['part_time_count'], "#f39c12")
     render_metric_card(c3, "💪 上班族強勢週", day_data['worker_strong_count'], "#3498db")
     render_metric_card(c4, "📈 上班族週趨勢", day_data['worker_trend_count'], "#9b59b6")
 
-    # 【修正】使用 .banner-text 確保白色
     st.markdown('<div class="strategy-banner worker-banner"><p class="banner-text">👨‍💼 上班族策略 (Worker Strategy)</p></div>', unsafe_allow_html=True)
     w1, w2 = st.columns(2)
     with w1: st.markdown("### 🚀 強勢週 TOP 3"); st.markdown(render_stock_tags(day_data['worker_strong_list']), unsafe_allow_html=True)
@@ -450,7 +455,7 @@ def show_admin_panel():
     st.title("⚙️ 資料管理後台")
     if not GOOGLE_API_KEY: st.error("❌ 未設定 API Key"); return
 
-    # --- 🛠️ 新增功能：模型診斷工具 ---
+    # --- 🛠️ API 診斷工具 ---
     with st.expander("🛠️ API 診斷工具 (若遇到 404 Error 請按此)"):
         if st.button("🔍 列出所有可用模型"):
             try:
@@ -459,7 +464,7 @@ def show_admin_panel():
                 for m in models:
                     if 'generateContent' in m.supported_generation_methods:
                         st.code(m.name)
-                st.info("請將上述列表中，支援 vision/flash 的模型名稱 (例如 `models/gemini-1.5-flash-latest`) 填入程式碼中的 `model_name`。")
+                st.info("請將上述列表中，支援 vision/flash 的模型名稱填入程式碼中的 `model_name`。")
             except Exception as e:
                 st.error(f"查詢失敗: {e}")
     # -------------------------------------
@@ -477,54 +482,45 @@ def show_admin_panel():
                 else:
                     raw_data = json.loads(json_text)
 
-                    # --- 🚨 新增：優先檢查是否為 API 錯誤 ---
+                    # --- 🚨 API 錯誤檢查 ---
                     if isinstance(raw_data, dict) and "error" in raw_data:
                         error_msg = raw_data["error"]
                         st.error(f"⚠️ API 回傳錯誤: {error_msg}")
-                        # 如果是額度問題，給予提示
                         if "429" in str(error_msg) or "quota" in str(error_msg).lower():
-                            st.warning("💡 提示：您的 API 免費額度暫時滿了。請等待 1 分鐘後再試，或更換為 'gemini-1.5-flash' 模型。")
-                        st.stop() # 停止執行後續程式
+                            st.warning("💡 提示：您的 API 免費額度暫時滿了。請等待 1 分鐘後再試。")
+                        st.stop()
                     # -------------------------------------
 
-                    # --- 🔎 V88 終極暴力搜索修正 (開始) ---
-                    # 定義一個遞迴函數，鑽遍所有層級，只抓出含有 "col_01" 的字典
+                    # --- 🔎 V88 終極暴力搜索 ---
                     def find_valid_records(data):
                         found = []
                         if isinstance(data, list):
                             for item in data:
                                 found.extend(find_valid_records(item))
                         elif isinstance(data, dict):
-                            # 如果這個字典有 col_01，它就是我們要的資料！
                             if "col_01" in data:
                                 found.append(data)
                             else:
-                                # 如果沒有，就繼續往它的 Values 裡面找
                                 for val in data.values():
                                     found.extend(find_valid_records(val))
                         return found
 
-                    # 直接執行搜索
                     raw_data = find_valid_records(raw_data)
                     
-                    # --- 🐞 除錯專用：顯示原始資料 (如果還是空白，請點開這個看) ---
+                    # --- 🐞 除錯資訊 ---
                     with st.expander("🕵️‍♂️ 開發者除錯資訊 (若資料空白請點我)"):
                         st.write("解析出的資料筆數:", len(raw_data))
-                        st.write("原始 JSON 內容:", json.loads(json_text)) # 顯示最原始的結構
+                        st.write("原始 JSON 內容:", json.loads(json_text)) 
                     # --------------------------------------------------
 
-                    # 防呆：確保是 List (雖然上面的函數一定回傳 List)
                     if not isinstance(raw_data, list):
                         raw_data = []
-                    # --- 🔎 V88 終極暴力搜索修正 (結束) ---
 
                     processed_list = []
                     for item in raw_data:
-                        # --- 額外保護：確保迴圈內的 item 真的是字典 ---
                         if not isinstance(item, dict):
                             continue 
-                        # ----------------------------------------
-
+                        
                         def merge_keys(prefix, count):
                             res = []; seen = set()
                             for i in range(1, count + 1):
@@ -604,5 +600,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
