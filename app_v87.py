@@ -21,8 +21,8 @@ try:
 except ImportError:
     from typing import TypedDict
 
-# --- 1. 頁面與 CSS (V157: 雲端部署優化版) ---
-st.set_page_config(layout="wide", page_title="StockTrack V157", page_icon="💎")
+# --- 1. 頁面與 CSS (V158: 雲端環境適配版) ---
+st.set_page_config(layout="wide", page_title="StockTrack V158", page_icon="💎")
 
 st.markdown("""
 <style>
@@ -65,7 +65,7 @@ st.markdown("""
     .stock-tag-cb { background-color: #fff8e1; border-color: #f1c40f; color: #d35400 !important; }
     .cb-badge { background-color: #e67e22; color: #FFFFFF !important; font-size: 0.6em; padding: 2px 6px; border-radius: 4px; margin-left: 5px; vertical-align: text-top; }
     
-    /* 成交值顯示 */
+    /* 成交值顯示 (強制紅色粗體) */
     .turnover-val {
         display: block;
         font-size: 0.8em;
@@ -87,7 +87,6 @@ st.markdown("""
     .boss-banner { background: linear-gradient(90deg, #c0392b, #e74c3c); }
     .revenue-banner { background: linear-gradient(90deg, #d35400, #e67e22); }
     
-    /* 下拉選單修正 */
     button[data-baseweb="tab"] { background-color: #FFFFFF !important; border: 1px solid #ddd !important; }
     button[data-baseweb="tab"][aria-selected="true"] { background-color: #e3f2fd !important; border-bottom: 4px solid #3498db !important; }
     .stSelectbox label { font-size: 18px !important; color: #333333 !important; font-weight: bold !important; }
@@ -106,7 +105,7 @@ try:
     if "GOOGLE_API_KEY" in st.secrets:
         GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     else:
-        GOOGLE_API_KEY = "AIzaSyCNYk70ekW1Zz4PQaGWhIZtupbxhB7VHhQ" 
+        GOOGLE_API_KEY = "" # 請填入您的 API KEY
 except:
     GOOGLE_API_KEY = ""
 
@@ -127,7 +126,7 @@ generation_config = {
 }
 
 if GOOGLE_API_KEY:
-    model_name_to_use = "gemini-1.5-flash"
+    model_name_to_use = "gemini-2.0-flash"
     model = genai.GenerativeModel(
         model_name=model_name_to_use,
         generation_config=generation_config,
@@ -199,7 +198,7 @@ for code, (name, sector) in MASTER_STOCK_DB.items():
     NAME_TO_SECTOR[name] = sector
     NAME_TO_CODE[name] = code
 
-# 別名對照 (解決簡稱)
+# 別名對照
 ALIAS_MAP = {
     "京元電": "京元電子", "亞翔工程": "亞翔", "聖暉*": "聖暉", "聖暉工程": "聖暉",
     "IET": "IET-KY", "JPP": "JPP-KY", "AES": "AES-KY", "世芯": "世芯-KY",
@@ -262,53 +261,42 @@ def clean_and_lookup_stock(raw_code_or_name, raw_name_from_source=None):
         return code, clean_name, sector
     return code, raw_code_or_name, "其他"
 
-# --- 【V157】全時段市場即時報價 (抗封鎖 + 保底) ---
-# 注意：這裡【移除】了 @st.cache_data，強制每次都向 Yahoo 請求最新數據，避免快取導致資料過期
+# --- 【V158】全球市場即時報價 (抗封鎖 + 保底) ---
 def get_global_market_data_live():
     try:
-        # 定義要抓取的指數
         indices = {
-            "^TWII": "🇹🇼 加權指數", 
-            "^TWOII": "🇹🇼 櫃買指數", 
-            "^N225": "🇯🇵 日經225",
-            "^DJI": "🇺🇸 道瓊工業", 
-            "^IXIC": "🇺🇸 那斯達克", 
-            "^SOX": "🇺🇸 費城半導體"
+            "^TWII": "🇹🇼 加權指數", "^TWOII": "🇹🇼 櫃買指數", "^N225": "🇯🇵 日經225",
+            "^DJI": "🇺🇸 道瓊工業", "^IXIC": "🇺🇸 那斯達克", "^SOX": "🇺🇸 費城半導體"
         }
         market_data = []
-        
-        # 1. 抓取所有指數的「日K」(保底數據，即使盤中抓不到也能顯示昨收)
-        # threads=False 是為了規避雲端封鎖
         tickers_list = list(indices.keys())
+        
+        # 1. 抓日K (保底)
         daily_data = yf.download(tickers_list, period="5d", group_by='ticker', progress=False, threads=False)
         
-        # 2. 嘗試抓取「分鐘K」(即時數據，可能為空或NaN)
+        # 2. 抓分鐘K (即時)
         try:
             minute_data = yf.download(tickers_list, period="1d", interval="1m", group_by='ticker', progress=False, threads=False)
-        except:
-            minute_data = pd.DataFrame()
+        except: minute_data = pd.DataFrame()
 
         for ticker, name in indices.items():
             try:
-                # --- A. 取得基礎日K數據 (Base) ---
                 price = 0.0
                 prev_close = 0.0
                 
+                # A. 日K基礎
                 if ticker in daily_data.columns.levels[0]:
                     df_day = daily_data[ticker]
                     if not df_day.empty:
-                        # 移除 NaN 確保取到數值
                         df_day_clean = df_day.dropna(subset=['Close'])
                         if not df_day_clean.empty:
                             price = float(df_day_clean['Close'].iloc[-1])
-                            # 找昨收：如果資料夠多，取倒數第二筆；否則取最後一筆
                             if len(df_day_clean) >= 2:
                                 prev_close = float(df_day_clean['Close'].iloc[-2])
                             else:
                                 prev_close = price
 
-                # --- B. 嘗試用分鐘K覆蓋 (Live) ---
-                # 只有在分鐘資料存在、非 NaN 且大於 0 時才覆蓋
+                # B. 分鐘K覆蓋
                 if not minute_data.empty and ticker in minute_data.columns.levels[0]:
                     df_min = minute_data[ticker]
                     if not df_min.empty:
@@ -318,8 +306,7 @@ def get_global_market_data_live():
                             if not pd.isna(min_price) and min_price > 0:
                                 price = min_price
 
-                # --- C. 特殊處理櫃買指數 (若還是NaN) ---
-                # 這是最後一道防線
+                # C. 櫃買補丁 (fast_info)
                 if ticker == "^TWOII" and (pd.isna(price) or price <= 0):
                     try:
                         t = yf.Ticker(ticker)
@@ -340,30 +327,24 @@ def get_global_market_data_live():
                 
                 market_data.append({
                     "name": name, 
-                    "price": f"{price:,.2f}", # 強制轉為字串並保留兩位小數
+                    "price": f"{price:,.2f}", 
                     "change": change, 
                     "pct_change": pct_change, 
                     "color_class": color_class, 
                     "card_class": card_class
                 })
             except: continue
-            
         return market_data
     except: return []
 
-# 使用 st.fragment 進行局部刷新，每 3 秒一次
 @st.fragment(run_every=3)
 def render_global_markets():
     markets = get_global_market_data_live()
     if markets:
         st.markdown("### 🌏 全球重要指數 (Real-time)")
-        
-        # 動態時間戳記 (加上微秒確保每次字串都不同，強制 UI 更新)
-        # 設定時區為 UTC+8 (台灣時間)
         tz_tw = timezone(timedelta(hours=8))
         now_str = datetime.now(tz_tw).strftime("%H:%M:%S")
         st.markdown(f"<small style='color:gray'>⚡ 自動更新中 | 最後更新: {now_str} (每3秒)</small>", unsafe_allow_html=True)
-        
         cols = st.columns(len(markets))
         for i, m in enumerate(markets):
             with cols[i]:
@@ -378,7 +359,7 @@ def render_global_markets():
     else:
         st.warning("正在連線至全球股市資料... (若久無回應請檢查網路)")
 
-# --- 【V150】預先批次抓取成交值 (修復定穎投控) ---
+# --- 【V150】預先批次抓取成交值 ---
 @st.cache_data(ttl=300)
 def prefetch_turnover_data(stock_list_str, target_date):
     if not stock_list_str: return {}
@@ -431,7 +412,6 @@ def prefetch_turnover_data(stock_list_str, target_date):
                 except: pass
             
             if found_val > 0:
-                # 【V150】綁定所有 Key
                 result_map[code] = found_val
                 result_map[names_dict["input"]] = found_val 
                 result_map[names_dict["db"]] = found_val 
@@ -439,7 +419,7 @@ def prefetch_turnover_data(stock_list_str, target_date):
         return result_map
     except Exception as e: return {}
 
-# --- 【V150】排行榜 (雙軌保底 + 錯誤處理) ---
+# --- 【V155】排行榜 (熱門股強制納入版) ---
 @st.cache_data(ttl=60) 
 def get_ranking_data(limit=20):
     # 1. 爬蟲
@@ -474,7 +454,6 @@ def get_ranking_data(limit=20):
                             if turnover > 0: all_data.append({"代號": code, "名稱": name, "股價": price, "漲跌幅%": chg, "成交值(億)": turnover, "市場": market, "族群": sector, "來源": "Yahoo"})
                         except: continue
         
-        # V150: 若爬蟲少於10筆，強制使用備援
         if len(all_data) > 10:
             df = pd.DataFrame(all_data)
             df = df.sort_values(by="成交值(億)", ascending=False).reset_index(drop=True)
@@ -482,8 +461,9 @@ def get_ranking_data(limit=20):
             return df.head(limit)
     except: pass
     
-    # 2. 強制備援：yfinance (僅抓前50權值股)
-    tickers = list(MASTER_STOCK_DB.keys())[:50]
+    # 2. 強制備援：yfinance (權值 + 熱門股名單)
+    hot_list = ["2330","2344","8358","2327","3163","2345","2454","1802","8021","8110","6770","2317","3037","4979","2368","1519","3105","1815","2383","2337"]
+    tickers = list(set(list(MASTER_STOCK_DB.keys())[:50] + hot_list))
     tickers = [f"{c}.TW" for c in tickers] + [f"{c}.TWO" for c in tickers]
     try:
         data = yf.download(tickers, period="1d", group_by='ticker', progress=False, threads=False)
