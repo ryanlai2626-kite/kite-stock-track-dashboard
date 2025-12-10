@@ -328,51 +328,57 @@ def prefetch_turnover_data(stock_list_str, target_date):
     except Exception as e:
         return {}
 
-# --- 全球市場即時報價 (V140: 自動刷新版) ---
-# 修改 A: 將快取時間 (ttl) 設為 3 秒，確保每次刷新都抓到新資料
-@st.cache_data(ttl=3)
-def get_global_market_data():
-    try:
-        indices = {"^TWII": "🇹🇼 加權指數", "^TWOII": "🇹🇼 櫃買指數", "^N225": "🇯🇵 日經225",
-                   "^DJI": "🇺🇸 道瓊工業", "^IXIC": "🇺🇸 那斯達克", "^SOX": "🇺🇸 費城半導體"}
-        market_data = []
-        for ticker, name in indices.items():
-            try:
-                stock = yf.Ticker(ticker)
-                # 抓取最近 5 天以計算漲跌
+# --- 【V150】全時段市場即時報價 (fast_info 精準版) ---
+def get_global_market_data_live():
+    indices = {
+        "^TWII": "🇹🇼 加權指數", "^TWOII": "🇹🇼 櫃買指數", "^N225": "🇯🇵 日經225",
+        "^DJI": "🇺🇸 道瓊工業", "^IXIC": "🇺🇸 那斯達克", "^SOX": "🇺🇸 費城半導體"
+    }
+    market_data = []
+    
+    for ticker, name in indices.items():
+        try:
+            stock = yf.Ticker(ticker)
+            
+            # 使用 fast_info 獲取最新即時報價 (最準確，不會有NaN)
+            # last_price = 最新成交價, previous_close = 昨日收盤價
+            price = stock.fast_info.get('last_price')
+            prev_close = stock.fast_info.get('previous_close')
+            
+            # 如果 fast_info 失敗，才退回使用 history
+            if price is None or pd.isna(price):
                 hist = stock.history(period="5d")
                 if not hist.empty:
-                    # 取得最新一筆 (Close)
                     price = hist['Close'].iloc[-1]
-                    
-                    # 取得前一筆 (用於計算漲跌)
                     prev_close = hist['Close'].iloc[-2] if len(hist) >= 2 else price
-                    
-                    change = price - prev_close
-                    pct_change = (change / prev_close) * 100
-                    
-                    color_class = "up-color" if change > 0 else ("down-color" if change < 0 else "flat-color")
-                    card_class = "card-up" if change > 0 else ("card-down" if change < 0 else "card-flat")
-                    
-                    market_data.append({"name": name, "price": f"{price:,.0f}", "change": change, 
-                                        "pct_change": pct_change, "color_class": color_class, "card_class": card_class})
-            except: continue
-        return market_data
-    except: return []
+            
+            if price is None or pd.isna(price): continue
 
-# 修改 B: 加入 @st.fragment 標籤，設定 run_every=5 (每5秒跑一次)
-@st.fragment(run_every=5)
+            change = price - prev_close
+            pct_change = (change / prev_close) * 100
+            
+            color_class = "up-color" if change > 0 else ("down-color" if change < 0 else "flat-color")
+            card_class = "card-up" if change > 0 else ("card-down" if change < 0 else "card-flat")
+            
+            market_data.append({
+                "name": name, 
+                "price": f"{price:,.2f}", 
+                "change": change, 
+                "pct_change": pct_change, 
+                "color_class": color_class, 
+                "card_class": card_class
+            })
+        except: continue
+        
+    return market_data
+
+@st.fragment(run_every=3)
 def render_global_markets():
-    # 這裡會呼叫上面的抓取函式
-    markets = get_global_market_data()
-    
+    markets = get_global_market_data_live()
     if markets:
         st.markdown("### 🌏 全球重要指數 (Real-time)")
-        
-        # 加入動態時間戳記，讓您確認它真的有在動
-        current_time = datetime.now().strftime("%H:%M:%S")
-        st.caption(f"⚡ 自動更新中 | 最後更新時間: {current_time} (每 5 秒刷新)")
-        
+        now_str = datetime.now().strftime("%H:%M:%S")
+        st.markdown(f"<small style='color:gray'>⚡ 自動更新中 | 最後更新: {now_str} (每3秒)</small>", unsafe_allow_html=True)
         cols = st.columns(len(markets))
         for i, m in enumerate(markets):
             with cols[i]:
@@ -380,12 +386,12 @@ def render_global_markets():
                 <div class="market-card {m['card_class']}">
                     <div class="market-name">{m['name']}</div>
                     <div class="market-price {m['color_class']}">{m['price']}</div>
-                    <div class="market-change {m['color_class']}">{m['change']:+.0f} ({m['pct_change']:+.2f}%)</div>
+                    <div class="market-change {m['color_class']}">{m['change']:+.2f} ({m['pct_change']:+.2f}%)</div>
                 </div>
                 """, unsafe_allow_html=True)
         st.divider()
     else:
-        st.warning("正在連線至全球股市資料...")
+        st.warning("正在連線至全球股市資料... (若久無回應請檢查網路)")
 
 # --- 真實爬蟲排行 ---
 @st.cache_data(ttl=60) 
@@ -892,5 +898,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
