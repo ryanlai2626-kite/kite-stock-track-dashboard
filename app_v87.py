@@ -21,123 +21,41 @@ try:
 except ImportError:
     from typing import TypedDict
 
-# --- 1. 頁面與 CSS (V108: 修復變數定義錯誤) ---
-st.set_page_config(layout="wide", page_title="StockTrack V108", page_icon="🔥")
+# --- 1. 頁面與 CSS (V110: 變數定義修復版) ---
+st.set_page_config(layout="wide", page_title="StockTrack V110", page_icon="🔥")
 
 st.markdown("""
 <style>
-    /* 1. 全域背景 (淺灰藍) 與深色文字 */
-    .stApp {
-        background-color: #F0F2F6 !important;
-        color: #333333 !important;
-        font-family: 'Helvetica', 'Arial', sans-serif;
-    }
-    
-    /* 2. 一般標題與文字強制深色 */
-    h1, h2, h3, h4, h5, h6, p, div, span, label, li {
-        color: #333333;
-    }
-
-    /* 3. 頂部標題區 (深色底，白字) */
-    .title-box {
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-        padding: 30px; border-radius: 15px; margin-bottom: 25px; text-align: center;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-    }
+    .stApp { background-color: #F0F2F6 !important; color: #333333 !important; font-family: 'Helvetica', 'Arial', sans-serif; }
+    h1, h2, h3, h4, h5, h6, p, div, span, label, li { color: #333333; }
+    .title-box { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); padding: 30px; border-radius: 15px; margin-bottom: 25px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
     .title-box h1 { color: #FFFFFF !important; font-size: 40px !important; margin-bottom: 10px !important; }
     .title-box p { color: #E0E0E0 !important; font-size: 18px !important; }
-
-    /* --- 4. 數據卡片 (主要指標) --- */
-    div.metric-container {
-        background-color: #FFFFFF !important; 
-        border-radius: 12px; padding: 20px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center;
-        border: 1px solid #E0E0E0; border-top: 5px solid #3498db;
-        display: flex; flex-direction: column; justify-content: center; align-items: center;
-        height: 200px !important;
-    }
+    div.metric-container { background-color: #FFFFFF !important; border-radius: 12px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; border: 1px solid #E0E0E0; border-top: 5px solid #3498db; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 200px !important; }
     .metric-value { font-size: 3.2rem !important; font-weight: 800; color: #2c3e50 !important; margin: 10px 0; }
     .metric-label { font-size: 1.5rem !important; color: #666666 !important; font-weight: 600; }
     .metric-sub { font-size: 1.1rem !important; color: #888888 !important; font-weight: bold; margin-top: 5px; }
-
-    /* --- 全球指數卡片樣式 --- */
-    .market-card {
-        background-color: #FFFFFF;
-        border-radius: 10px;
-        padding: 15px;
-        margin: 5px;
-        text-align: center;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-        border: 1px solid #EAEAEA;
-        transition: transform 0.2s;
-    }
-    .market-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.12);
-    }
-    .market-name {
-        font-size: 1.1rem;
-        font-weight: bold;
-        color: #555;
-        margin-bottom: 5px;
-    }
-    .market-price {
-        font-size: 2.0rem;
-        font-weight: 900;
-        margin: 5px 0;
-        font-family: 'Roboto', sans-serif;
-    }
-    .market-change {
-        font-size: 1.2rem;
-        font-weight: 700;
-    }
-    
-    /* 漲跌顏色定義 */
-    .up-color { color: #e74c3c !important; } /* 紅 */
-    .down-color { color: #27ae60 !important; } /* 綠 */
-    .flat-color { color: #7f8c8d !important; } /* 灰 */
-    
+    .market-card { background-color: #FFFFFF; border-radius: 10px; padding: 15px; margin: 5px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.08); border: 1px solid #EAEAEA; transition: transform 0.2s; }
+    .market-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.12); }
+    .market-name { font-size: 1.1rem; font-weight: bold; color: #555; margin-bottom: 5px; }
+    .market-price { font-size: 2.0rem; font-weight: 900; margin: 5px 0; font-family: 'Roboto', sans-serif; }
+    .market-change { font-size: 1.2rem; font-weight: 700; }
+    .up-color { color: #e74c3c !important; } .down-color { color: #27ae60 !important; } .flat-color { color: #7f8c8d !important; }
     .card-up { border-bottom: 4px solid #e74c3c; background: linear-gradient(to bottom, #fff, #fff5f5); }
     .card-down { border-bottom: 4px solid #27ae60; background: linear-gradient(to bottom, #fff, #f0fdf4); }
     .card-flat { border-bottom: 4px solid #95a5a6; }
-
-    /* 手機版優化 */
-    @media (max-width: 900px) {
-        div.metric-container {
-            height: auto !important; min-height: 160px !important; padding: 10px !important;
-        }
-        .metric-value { font-size: 2.2rem !important; }
-        .metric-label { font-size: 1.2rem !important; }
-        .market-price { font-size: 1.6rem; } 
-    }
-
-    /* 5. 策略橫幅 */
-    .strategy-banner {
-        padding: 15px 25px; border-radius: 8px; 
-        margin-top: 35px; margin-bottom: 20px; display: flex; align-items: center;
-        box-shadow: 0 3px 6px rgba(0,0,0,0.15);
-    }
+    @media (max-width: 900px) { div.metric-container { height: auto !important; min-height: 160px !important; padding: 10px !important; } .metric-value { font-size: 2.2rem !important; } .metric-label { font-size: 1.2rem !important; } .market-price { font-size: 1.6rem; } }
+    .strategy-banner { padding: 15px 25px; border-radius: 8px; margin-top: 35px; margin-bottom: 20px; display: flex; align-items: center; box-shadow: 0 3px 6px rgba(0,0,0,0.15); }
     .banner-text { color: #FFFFFF !important; font-size: 24px !important; font-weight: 800 !important; margin: 0 !important; }
     .worker-banner { background: linear-gradient(90deg, #2980b9, #3498db); }
     .boss-banner { background: linear-gradient(90deg, #c0392b, #e74c3c); }
     .revenue-banner { background: linear-gradient(90deg, #d35400, #e67e22); }
-
-    /* 6. 股票標籤 */
-    .stock-tag {
-        display: inline-block; background-color: #FFFFFF; color: #2c3e50 !important;
-        border: 2px solid #bdc3c7; padding: 10px 20px; margin: 8px;
-        border-radius: 8px; font-weight: 800; font-size: 1.6rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
+    .stock-tag { display: inline-block; background-color: #FFFFFF; color: #2c3e50 !important; border: 2px solid #bdc3c7; padding: 10px 20px; margin: 8px; border-radius: 8px; font-weight: 800; font-size: 1.6rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     .stock-tag-cb { background-color: #fff8e1; border-color: #f1c40f; color: #d35400 !important; }
     .cb-badge { background-color: #e67e22; color: #FFFFFF !important; font-size: 0.7em; padding: 3px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
-    
-    /* 7. 表格優化 */
     .stDataFrame table { text-align: center !important; }
     .stDataFrame th { font-size: 18px !important; color: #000000 !important; background-color: #E6E9EF !important; text-align: center !important; font-weight: 900 !important; }
     .stDataFrame td { font-size: 18px !important; color: #333333 !important; background-color: #FFFFFF !important; text-align: center !important; }
-
-    /* 8. 分頁與選單 */
     button[data-baseweb="tab"] { background-color: #FFFFFF !important; border: 1px solid #ddd !important; }
     button[data-baseweb="tab"][aria-selected="true"] { background-color: #e3f2fd !important; border-bottom: 4px solid #3498db !important; }
     .stSelectbox label { font-size: 18px !important; color: #333333 !important; font-weight: bold !important; }
@@ -146,7 +64,6 @@ st.markdown("""
     .stSelectbox div[data-baseweb="select"] svg { fill: #FFFFFF !important; color: #FFFFFF !important; }
     li[role="option"] { background-color: #2c3e50 !important; color: #FFFFFF !important; }
     li[role="option"]:hover { background-color: #34495e !important; color: #f1c40f !important; }
-
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
@@ -156,7 +73,7 @@ try:
     if "GOOGLE_API_KEY" in st.secrets:
         GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     else:
-        GOOGLE_API_KEY = "請輸入你的API KEY" 
+        GOOGLE_API_KEY = "請輸入API KEY" 
 except:
     GOOGLE_API_KEY = ""
 
@@ -188,141 +105,134 @@ BACKUP_FILE = 'stock_data_backup.csv'
 
 # --- 3. 核心函數 ---
 
-# 【V108 核心】代碼與族群對照 (Code -> (Name, Sector))
-# 包含您指定的熱門股與權值股
+# 【V110】完整台股代碼庫 (Master Database)
+# 格式: "代碼": ("中文名稱", "族群")
 TW_STOCK_INFO = {
-    # 權值/熱門 (上市)
-    "2330": ("台積電", "晶圓代工"), "2317": ("鴻海", "AI伺服器"), "2454": ("聯發科", "IC設計"), 
-    "2382": ("廣達", "AI伺服器"), "3231": ("緯創", "AI伺服器"), "2603": ("長榮", "航運"),
-    "3008": ("大立光", "光學鏡頭"), "3037": ("欣興", "ABF載板"), "3034": ("聯詠", "IC設計"),
-    "2379": ("瑞昱", "IC設計"), "2303": ("聯電", "晶圓代工"), "2881": ("富邦金", "金融"),
-    "2308": ("台達電", "電源/EV"), "1519": ("華城", "重電"), "1513": ("中興電", "重電"),
-    "2449": ("京元電子", "封測"), "6290": ("良維", "連接器"), "6781": ("AES-KY", "電池模組"),
-    "2427": ("三商電", "系統整合"), "2357": ("華碩", "AI伺服器"), "2356": ("英業達", "AI伺服器"),
-    "6669": ("緯穎", "AI伺服器"), "3035": ("智原", "IP矽智財"), "3443": ("創意", "IP矽智財"),
-    "3661": ("世芯-KY", "IP矽智財"), "3017": ("奇鋐", "散熱"), "3324": ("雙鴻", "散熱"),
-    "2345": ("智邦", "網通"), "3711": ("日月光投控", "封測"), "2368": ("金像電", "PCB"),
-    "2383": ("台光電", "CCL銅箔"), "6213": ("聯茂", "CCL銅箔"), "6805": ("富世達", "軸承/散熱"),
-    "2353": ("宏碁", "AI PC"), "2324": ("仁寶", "組裝代工"), "2301": ("光寶科", "電源"),
-    "2327": ("國巨", "被動元件"), "2344": ("華邦電", "記憶體"), "2408": ("南亞科", "記憶體"),
-    "8110": ("華東", "封測"), "1605": ("華新", "電線電纜"), "2609": ("陽明", "航運"),
-    "2615": ("萬海", "航運"), "1503": ("士電", "重電"), "1504": ("東元", "重電"),
-    "1815": ("富喬", "PCB材料"), "2376": ("技嘉", "板卡/伺服器"), "2377": ("微星", "板卡"),
-    "2492": ("華新科", "被動元件"), "3044": ("健鼎", "PCB"), "4958": ("臻鼎-KY", "PCB"),
-    "4938": ("和碩", "組裝代工"), "9958": ("世紀鋼", "風電"), "6415": ("矽力-KY", "IC設計"),
-    "3406": ("玉晶光", "光學鏡頭"), "2409": ("友達", "面板"), "3481": ("群創", "面板"),
-    "3406": ("玉晶光", "光學鏡頭"), "6239": ("力成", "封測"), "6770": ("力積電", "晶圓代工"),
+    # === 半導體權值 ===
+    "2330": ("台積電", "晶圓代工"), "2303": ("聯電", "晶圓代工"), "6770": ("力積電", "晶圓代工"),
+    "5347": ("世界", "晶圓代工"), "2454": ("聯發科", "IC設計"), "2317": ("鴻海", "AI伺服器/組裝"),
+    "3711": ("日月光投控", "封測"),
     
-    # 權值/熱門 (上櫃)
-    "8299": ("群聯", "記憶體控制"), "8069": ("元太", "電子紙"), "6488": ("環球晶", "矽晶圓"),
-    "3293": ("鈊象", "遊戲"), "3529": ("力旺", "IP矽智財"), "3131": ("弘塑", "CoWoS設備"),
-    "5274": ("信驊", "IC設計"), "5347": ("世界", "晶圓代工"), "4966": ("譜瑞-KY", "IC設計"),
-    "6274": ("台燿", "CCL銅箔"), "3374": ("精材", "封測"), "6147": ("頎邦", "封測"),
-    "5483": ("中美晶", "矽晶圓"), "3105": ("穩懋", "砷化鎵"), "6223": ("旺矽", "探針卡"),
-    "3081": ("聯亞", "光通訊"), "3450": ("聯鈞", "CPO/光通訊"), "4979": ("華星光", "光通訊"),
-    "5289": ("宜鼎", "工控記憶體"), "4760": ("勤凱", "被動元件/材料"), "6683": ("雍智科技", "測試介面"),
-    "8996": ("高力", "散熱"), "6187": ("萬潤", "CoWoS設備"), "3583": ("辛耘", "CoWoS設備"),
-    "6138": ("茂達", "IC設計"), "3680": ("家登", "半導體設備"), "5425": ("台半", "二極體"),
-    "3260": ("威剛", "記憶體"), "8046": ("南電", "ABF載板"), 
-    "4768": ("晶呈科技", "半導體特氣"), "8112": ("至上", "IC通路"), "5314": ("世紀", "IC設計"),
-    "3162": ("精確", "車用零組件"), "4971": ("IET-KY", "砷化鎵"), "3167": ("大量", "半導體設備"),
-    "8021": ("尖點", "PCB鑽針"), "8358": ("金居", "CCL銅箔"), "3163": ("波若威", "光通訊"),
-    "4908": ("前鼎", "光通訊"), "3363": ("上詮", "光通訊"), "4961": ("天鈺", "IC設計"),
-    "6279": ("胡連", "車用連接器"), "3693": ("營邦", "機殼"), "8210": ("勤誠", "機殼"),
-    "3558": ("神準", "網通"), "6180": ("橘子", "遊戲"), "6515": ("穎崴", "測試介面"),
-    "6182": ("合晶", "矽晶圓"), "8086": ("宏捷科", "砷化鎵"), "3217": ("優群", "連接器")
+    # === 記憶體 & 模組 (今日熱門) ===
+    "2344": ("華邦電", "記憶體"), "2408": ("南亞科", "記憶體"), "2337": ("旺宏", "記憶體"),
+    "3006": ("晶豪科", "記憶體IC"), "8299": ("群聯", "記憶體控制"), "3260": ("威剛", "記憶體模組"),
+    "4967": ("十銓", "記憶體模組"), "8271": ("宇瞻", "記憶體模組"), "5289": ("宜鼎", "工控記憶體"),
+    
+    # === 散熱族群 ===
+    "3017": ("奇鋐", "散熱"), "3324": ("雙鴻", "散熱"), "3653": ("健策", "散熱"),
+    "8996": ("高力", "散熱"), "2421": ("建準", "散熱"), "3483": ("力致", "散熱"),
+    "3338": ("泰碩", "散熱"), "6230": ("尼得科超眾", "散熱"),
+    
+    # === AI 伺服器 & 組裝 ===
+    "2382": ("廣達", "AI伺服器"), "3231": ("緯創", "AI伺服器"), "6669": ("緯穎", "AI伺服器"),
+    "2356": ("英業達", "AI伺服器"), "2376": ("技嘉", "AI伺服器"), "2357": ("華碩", "AI伺服器"),
+    "2324": ("仁寶", "組裝代工"), "4938": ("和碩", "組裝代工"), "2353": ("宏碁", "AI PC"),
+    "2301": ("光寶科", "電源/伺服器"), "2377": ("微星", "板卡/伺服器"),
+    
+    # === 機殼 & 導軌 & 軸承 ===
+    "8210": ("勤誠", "機殼"), "2059": ("川湖", "導軌"), "3693": ("營邦", "機殼"),
+    "3013": ("晟銘電", "機殼"), "6805": ("富世達", "軸承/散熱"),
+    
+    # === CPO / 光通訊 / 網通 (今日熱門) ===
+    "3450": ("聯鈞", "CPO/光通訊"), "3163": ("波若威", "光通訊"), "3081": ("聯亞", "光通訊"),
+    "4979": ("華星光", "光通訊"), "3363": ("上詮", "光通訊"), "4908": ("前鼎", "光通訊"),
+    "4977": ("眾達-KY", "光通訊"), "3234": ("光環", "光通訊"), "6451": ("訊芯-KY", "CPO封測"),
+    "2345": ("智邦", "網通"), "5388": ("中磊", "網通"), "6285": ("啟碁", "網通"),
+    
+    # === PCB / CCL / 材料 (今日熱門) ===
+    "8358": ("金居", "CCL銅箔/材料"), "2383": ("台光電", "CCL銅箔"), "6274": ("台燿", "CCL銅箔"),
+    "6213": ("聯茂", "CCL銅箔"), "3037": ("欣興", "ABF載板"), "8046": ("南電", "ABF載板"),
+    "3189": ("景碩", "ABF載板"), "2368": ("金像電", "PCB"), "3044": ("健鼎", "PCB"),
+    "2313": ("華通", "PCB"), "6251": ("定穎投控", "PCB"), "8155": ("博智", "PCB"),
+    "1815": ("富喬", "PCB材料"), "8021": ("尖點", "PCB鑽針"), "4760": ("勤凱", "被動元件/材料"),
+    "1711": ("永光", "特用化學"), "4768": ("晶呈科技", "半導體特氣"),
+    
+    # === 被動元件 ===
+    "2327": ("國巨", "被動元件"), "2492": ("華新科", "被動元件"), "6449": ("鈺邦", "被動元件"),
+    "2456": ("奇力新", "被動元件"),
+    
+    # === 設備 & 封測 ===
+    "3131": ("弘塑", "CoWoS設備"), "3583": ("辛耘", "CoWoS設備"), "6187": ("萬潤", "CoWoS設備"),
+    "3413": ("京鼎", "設備"), "6196": ("帆宣", "設備"), "3680": ("家登", "光罩盒"),
+    "3167": ("大量", "PCB/半導體設備"), "2483": ("百容", "導線架"), "2449": ("京元電子", "封測"),
+    "8110": ("華東", "封測"), "6239": ("力成", "封測"), "6147": ("頎邦", "封測"),
+    
+    # === 重電 & 綠能 & 線纜 ===
+    "1519": ("華城", "重電"), "1513": ("中興電", "重電"), "1503": ("士電", "重電"),
+    "1504": ("東元", "重電"), "1605": ("華新", "電線電纜"), "1609": ("大亞", "電線電纜"),
+    "6806": ("森崴能源", "綠能"), "9958": ("世紀鋼", "風電"),
+    
+    # === 電池 & 車用 & 連接器 ===
+    "6781": ("AES-KY", "電池模組"), "6290": ("良維", "連接器"), "3217": ("優群", "連接器"),
+    "6279": ("胡連", "車用連接器"), "3162": ("精確", "車用零組件"), "2308": ("台達電", "電源/EV"),
+    
+    # === IP / IC設計 ===
+    "3661": ("世芯-KY", "IP矽智財"), "3443": ("創意", "IP矽智財"), "3035": ("智原", "IP矽智財"),
+    "3034": ("聯詠", "IC設計"), "2379": ("瑞昱", "IC設計"), "5274": ("信驊", "IC設計"),
+    "5314": ("世紀", "IC設計"), "6462": ("神盾", "神盾集團"), "6138": ("茂達", "IC設計"),
+    
+    # === 系統整合 & 其他 ===
+    "2427": ("三商電", "系統整合"), "6214": ("精誠", "系統整合"), "8112": ("至上", "IC通路"),
+    "3036": ("文曄", "IC通路"), "3702": ("大聯大", "IC通路"), "6414": ("樺漢", "IPC"),
+    "6166": ("凌華", "IPC"), "3706": ("神達", "伺服器"), "2312": ("金寶", "組裝代工"),
+    "5284": ("JPP-KY", "航太/機殼"), "4971": ("IET-KY", "砷化鎵"), "2603": ("長榮", "航運"),
+    "2609": ("陽明", "航運"), "2615": ("萬海", "航運"), "2618": ("長榮航", "航空")
 }
 
-# 【V108 修復】自動產生 NAME_TO_SECTOR (解決 NameError)
+# 【V110】自動生成 NAME_TO_SECTOR (確保同步)
 NAME_TO_SECTOR = {}
 for code, (name, sector) in TW_STOCK_INFO.items():
     NAME_TO_SECTOR[name] = sector
 
-# 輔助函式：取得名稱
-def get_stock_name(code):
-    clean_code = str(code).replace("(CB)", "").strip()
-    return TW_STOCK_INFO.get(clean_code, (clean_code, "其他"))[0]
-
-# 輔助函式：取得族群 (支援從代號或名稱反查)
-def get_stock_sector(identifier):
-    clean_id = str(identifier).replace("(CB)", "").strip()
-    
-    # 1. 嘗試用代號查
-    if clean_id in TW_STOCK_INFO:
-        return TW_STOCK_INFO[clean_id][1]
-    
-    # 2. 嘗試用名稱查 (反向搜尋 NAME_TO_SECTOR)
-    if clean_id in NAME_TO_SECTOR:
-        return NAME_TO_SECTOR[clean_id]
-            
-    return "其他"
-
-# 【V108】統一清洗與查表函式 (修復 8358O 亂碼問題)
+# 輔助函式：清洗並反查 (解決代碼/名稱/亂碼問題)
 def clean_and_lookup_stock(raw_code_or_name, raw_name_from_source=None):
-    # 1. 暴力清洗：只保留數字 (解決 8358O, 2454.TW)
+    # 1. 暴力清洗代碼：只保留數字
     code = re.sub(r"\D", "", str(raw_code_or_name))
     
-    # 2. 優先查代號
+    # 2. 如果有代碼且在資料庫中 -> 完美匹配
     if code and code in TW_STOCK_INFO:
         return code, TW_STOCK_INFO[code][0], TW_STOCK_INFO[code][1]
-    
-    # 3. 查不到代號，嘗試用傳入的中文名稱反查 (解決 Yahoo 爬蟲只有中文名的狀況)
-    if raw_name_from_source:
-        sector = NAME_TO_SECTOR.get(raw_name_from_source, "其他")
-        # 嘗試反查代號 (非必要，但有助於一致性)
-        for c, info in TW_STOCK_INFO.items():
-            if info[0] == raw_name_from_source:
-                return c, info[0], info[1]
-        return code, raw_name_from_source, sector
         
+    # 3. 如果沒有代碼，但有來源名稱 (例如 "華邦電")
+    if raw_name_from_source:
+        clean_name = raw_name_from_source.replace('*', '').strip()
+        sector = NAME_TO_SECTOR.get(clean_name, "其他")
+        
+        # 嘗試反查代碼 (為了完整性)
+        for c, info in TW_STOCK_INFO.items():
+            if info[0] == clean_name:
+                return c, info[0], info[1]
+                
+        return code, clean_name, sector
+    
     return code, raw_code_or_name, "其他"
 
-# --- 【V104 修復版】全球市場即時報價 ---
+# --- 【V104】全球市場即時報價 ---
 @st.cache_data(ttl=60)
 def get_global_market_data():
     try:
-        indices = {
-            "^TWII": "🇹🇼 加權指數",
-            "^TWOII": "🇹🇼 櫃買指數",
-            "^N225": "🇯🇵 日經225",
-            "^DJI": "🇺🇸 道瓊工業",
-            "^IXIC": "🇺🇸 那斯達克",
-            "^SOX": "🇺🇸 費城半導體"
-        }
+        indices = {"^TWII": "🇹🇼 加權指數", "^TWOII": "🇹🇼 櫃買指數", "^N225": "🇯🇵 日經225",
+                   "^DJI": "🇺🇸 道瓊工業", "^IXIC": "🇺🇸 那斯達克", "^SOX": "🇺🇸 費城半導體"}
         market_data = []
         for ticker, name in indices.items():
             try:
                 stock = yf.Ticker(ticker)
-                hist = stock.history(period="5d") # 強制抓歷史
+                hist = stock.history(period="5d")
                 if not hist.empty:
                     price = hist['Close'].iloc[-1]
-                    if len(hist) >= 2: prev_close = hist['Close'].iloc[-2]
-                    else: prev_close = price
-                    
+                    prev_close = hist['Close'].iloc[-2] if len(hist) >= 2 else price
                     change = price - prev_close
                     pct_change = (change / prev_close) * 100
                     
-                    color_class = "flat-color"
-                    if change > 0: color_class = "up-color"
-                    elif change < 0: color_class = "down-color"
+                    color_class = "up-color" if change > 0 else ("down-color" if change < 0 else "flat-color")
+                    card_class = "card-up" if change > 0 else ("card-down" if change < 0 else "card-flat")
                     
-                    card_class = "card-flat"
-                    if change > 0: card_class = "card-up"
-                    elif change < 0: card_class = "card-down"
-                    
-                    market_data.append({
-                        "name": name,
-                        "price": f"{price:,.0f}",
-                        "change": change,
-                        "pct_change": pct_change,
-                        "color_class": color_class,
-                        "card_class": card_class
-                    })
+                    market_data.append({"name": name, "price": f"{price:,.0f}", "change": change, 
+                                        "pct_change": pct_change, "color_class": color_class, "card_class": card_class})
             except: continue
         return market_data
     except: return []
 
-# --- 顯示全球市場區塊 (V106 卡片風格) ---
 def render_global_markets():
     markets = get_global_market_data()
     if markets:
@@ -334,29 +244,17 @@ def render_global_markets():
                 <div class="market-card {m['card_class']}">
                     <div class="market-name">{m['name']}</div>
                     <div class="market-price {m['color_class']}">{m['price']}</div>
-                    <div class="market-change {m['color_class']}">
-                        {m['change']:+.0f} ({m['pct_change']:+.2f}%)
-                    </div>
+                    <div class="market-change {m['color_class']}">{m['change']:+.0f} ({m['pct_change']:+.2f}%)</div>
                 </div>
                 """, unsafe_allow_html=True)
         st.divider()
 
-# --- 【V107+V108】混合模式：爬蟲優先 -> yfinance 備援 (修正亂碼) ---
+# --- 【V107+V110】混合模式：爬蟲優先 -> yfinance 備援 ---
 @st.cache_data(ttl=60) 
 def get_rank_v107_hybrid(limit=20):
-    
-    # 1. 嘗試爬取 Yahoo 股市網頁
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-            "Referer": "https://tw.stock.yahoo.com/"
-        }
-        
-        urls = [
-            ("https://tw.stock.yahoo.com/rank/turnover?exchange=TAI", "上市"),
-            ("https://tw.stock.yahoo.com/rank/turnover?exchange=TWO", "上櫃")
-        ]
-        
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36", "Referer": "https://tw.stock.yahoo.com/"}
+        urls = [("https://tw.stock.yahoo.com/rank/turnover?exchange=TAI", "上市"), ("https://tw.stock.yahoo.com/rank/turnover?exchange=TWO", "上櫃")]
         scraped_data = []
         
         for url, market in urls:
@@ -376,6 +274,7 @@ def get_rank_v107_hybrid(limit=20):
                         name_idx = next((i for i, c in enumerate(cols) if "股" in str(c) and "名" in str(c)), 1)
                         price_idx = next((i for i, c in enumerate(cols) if "股價" in str(c)), 2)
                         turnover_idx = next((i for i, c in enumerate(cols) if "值" in str(c) or "金額" in str(c)), 6)
+                        change_idx = next((i for i, c in enumerate(cols) if "漲跌幅" in str(c)), 4)
                         
                         for idx, row in target_df.iterrows():
                             try:
@@ -384,23 +283,19 @@ def get_rank_v107_hybrid(limit=20):
                                 raw_code = tokens[0]
                                 raw_name = tokens[1] if len(tokens) > 1 else raw_code
                                 
-                                # 【V108】使用統一清洗函數
+                                # 【V110】使用統一清洗函數
                                 code, name, sector = clean_and_lookup_stock(raw_code, raw_name)
                                 
                                 price = float(str(row.iloc[price_idx]).replace(',', ''))
-                                
                                 raw_turnover = str(row.iloc[turnover_idx])
                                 turnover = float(re.sub(r"[^\d.]", "", raw_turnover))
                                 
-                                # 漲跌幅簡化處理
-                                change = 0.0
+                                raw_change = str(row.iloc[change_idx])
+                                if "▼" in raw_change or "-" in raw_change: change = -abs(float(re.sub(r"[^\d.]", "", raw_change)))
+                                else: change = abs(float(re.sub(r"[^\d.]", "", raw_change)))
                                 
                                 if turnover > 0:
-                                    scraped_data.append({
-                                        "代號": code, "名稱": name, "股價": price,
-                                        "漲跌幅%": change, "成交值(億)": turnover,
-                                        "市場": market, "族群": sector, "來源": "Yahoo爬蟲"
-                                    })
+                                    scraped_data.append({"代號": code, "名稱": name, "股價": price, "漲跌幅%": change, "成交值(億)": turnover, "市場": market, "族群": sector, "來源": "Yahoo爬蟲"})
                             except: continue
             except: pass
             
@@ -411,46 +306,30 @@ def get_rank_v107_hybrid(limit=20):
             df.insert(0, '排名', df.index)
             return df.head(limit)
             
-    except Exception as e:
-        print(f"Scraping failed: {e}")
+    except Exception as e: print(f"Scraping failed: {e}")
 
-    # 2. 備援機制：yfinance (使用 V108 完整名單)
+    # 2. 備援機制：yfinance
     tickers = [f"{c}.TW" for c in TW_STOCK_INFO.keys()] + [f"{c}.TWO" for c in TW_STOCK_INFO.keys()]
-    
     try:
         data = yf.download(tickers, period="1d", group_by='ticker', progress=False, threads=True)
         yf_list = []
-        
         for ticker in tickers:
             try:
-                # 【V108】暴力清洗 ticker (例如 8358.TWO -> 8358)
                 code = re.sub(r"\D", "", ticker)
-                
                 if ticker not in data.columns.levels[0]: continue
                 df_stock = data[ticker]
                 if df_stock.empty: continue
-                
                 latest = df_stock.iloc[-1]
                 price = latest['Close']
                 volume = latest['Volume']
-                
                 if pd.isna(price) or pd.isna(volume) or price <= 0: continue
-                
                 turnover = (price * volume) / 100000000
                 if turnover < 1: continue
-                
                 op = latest['Open']
                 chg = ((price - op)/op)*100 if op > 0 else 0
-                
-                # 【V108】查表
                 _, name, sector = clean_and_lookup_stock(code)
                 market = "上櫃" if ".TWO" in ticker else "上市"
-                
-                yf_list.append({
-                    "代號": code, "名稱": name, "股價": round(float(price),2),
-                    "漲跌幅%": round(float(chg),2), "成交值(億)": round(float(turnover),2),
-                    "市場": market, "族群": sector, "來源": "YahooFinance"
-                })
+                yf_list.append({"代號": code, "名稱": name, "股價": round(float(price),2), "漲跌幅%": round(float(chg),2), "成交值(億)": round(float(turnover),2), "市場": market, "族群": sector, "來源": "YahooFinance"})
             except: continue
             
         if yf_list:
@@ -459,10 +338,9 @@ def get_rank_v107_hybrid(limit=20):
             df.index = df.index + 1
             df.insert(0, '排名', df.index)
             return df.head(limit)
-            
     except: pass
     
-    return "無法取得資料 (爬蟲與API皆失敗)"
+    return "無法取得資料"
 
 # --- UI 輔助函數 ---
 def render_metric_card(col, label, value, color_border="gray", sub_value=""):
@@ -589,7 +467,7 @@ def ai_analyze_v86(image):
         return response.text
     except Exception as e: return json.dumps({"error": str(e)})
 
-# --- 【V108 修正】計算月度風雲榜 (使用 Name-Based 查表) ---
+# --- 【V100 更新】策略選股月度風雲榜 ---
 def calculate_monthly_stats(df):
     if df.empty: return pd.DataFrame()
     df['dt'] = pd.to_datetime(df['date'], errors='coerce')
@@ -612,8 +490,12 @@ def calculate_monthly_stats(df):
         counts = exploded.groupby(['Month', 'stock']).size().reset_index(name='Count')
         counts['Strategy'] = strategy_name
         
-        # 【V108】從名稱查族群
-        counts['Industry'] = counts['stock'].apply(get_stock_sector)
+        # 【V108 更新】更聰明的族群反查
+        def find_sector(stock_name):
+            clean_name = stock_name.replace("(CB)", "").strip()
+            return NAME_TO_SECTOR.get(clean_name, "其他")
+            
+        counts['Industry'] = counts['stock'].apply(find_sector)
         
         all_stats.append(counts)
         
@@ -638,7 +520,7 @@ def show_dashboard():
 
     st.markdown(f"""<div class="title-box"><h1 style='margin:0; font-size: 2.8rem;'>📅 {selected_date} 市場戰情室</h1><p style='margin-top:10px; opacity:0.9;'>資料更新於: {day_data['last_updated']}</p></div>""", unsafe_allow_html=True)
 
-    # 全球市場報價牆 (V108 回歸卡片式)
+    # 全球市場報價牆 (V106 優化版)
     render_global_markets()
 
     st.divider()
@@ -693,7 +575,7 @@ def show_dashboard():
         grouped_chart = alt.Chart(monthly_wind).mark_bar().encode(x=alt.X('Month:O', title='月份', axis=axis_config), y=alt.Y('days:Q', title='天數', axis=axis_config), color=alt.Color('wind:N', title='風度', sort=group_order, scale=alt.Scale(domain=['無風', '陣風', '亂流', '強風'], range=['#2ecc71', '#f1c40f', '#9b59b6', '#e74c3c']), legend=legend_config), xOffset=alt.XOffset('wind:N', sort=group_order), tooltip=['Month', 'wind', 'days']).properties(height=450).configure(background='white').interactive()
         st.altair_chart(grouped_chart, use_container_width=True)
 
-    # --- 【V108 更新】策略選股月度風雲榜 ---
+    # --- 【V100 更新】策略選股月度風雲榜 ---
     st.markdown("---")
     st.header("🏆 策略選股月度風雲榜")
     st.caption("統計各策略下，股票出現的次數與所屬族群。")
