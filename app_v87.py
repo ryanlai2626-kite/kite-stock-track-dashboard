@@ -21,8 +21,8 @@ try:
 except ImportError:
     from typing import TypedDict
 
-# --- 1. 頁面與 CSS (V142: 時光機容錯版) ---
-st.set_page_config(layout="wide", page_title="StockTrack V142", page_icon="💰")
+# --- 1. 頁面與 CSS (V156: 內部排行保底版) ---
+st.set_page_config(layout="wide", page_title="StockTrack V156", page_icon="💎")
 
 st.markdown("""
 <style>
@@ -65,12 +65,12 @@ st.markdown("""
     .stock-tag-cb { background-color: #fff8e1; border-color: #f1c40f; color: #d35400 !important; }
     .cb-badge { background-color: #e67e22; color: #FFFFFF !important; font-size: 0.6em; padding: 2px 6px; border-radius: 4px; margin-left: 5px; vertical-align: text-top; }
     
-    /* 成交值顯示 (強制深橘色粗體) */
+    /* 成交值顯示 (強制紅色粗體) */
     .turnover-val {
         display: block;
         font-size: 0.8em;
         font-weight: 900;
-        color: #d35400; 
+        color: #c0392b; /* 鮮紅 */
         margin-top: 4px;
         padding-top: 4px;
         border-top: 1px dashed #ccc;
@@ -106,7 +106,7 @@ try:
     if "GOOGLE_API_KEY" in st.secrets:
         GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     else:
-        GOOGLE_API_KEY = "請輸入API KEY" 
+        GOOGLE_API_KEY = "AIzaSyCNYk70ekW1Zz4PQaGWhIZtupbxhB7VHhQ" 
 except:
     GOOGLE_API_KEY = ""
 
@@ -127,7 +127,7 @@ generation_config = {
 }
 
 if GOOGLE_API_KEY:
-    model_name_to_use = "gemini-2.0-flash"
+    model_name_to_use = "gemini-1.5-flash"
     model = genai.GenerativeModel(
         model_name=model_name_to_use,
         generation_config=generation_config,
@@ -137,10 +137,11 @@ DB_FILE = 'stock_data_v74.csv'
 BACKUP_FILE = 'stock_data_backup.csv'
 
 # --- 3. 核心資料庫 (MASTER_STOCK_DB) ---
+# 包含您提到的所有股票 + 權值股
 MASTER_STOCK_DB = {
     # 權值/熱門 (上市)
-    "2330": ("台積電", "晶圓代工"), "2317": ("鴻海", "AI伺服器組裝代工"), "2454": ("聯發科", "IC設計"), 
-    "2382": ("廣達", "AI伺服器組裝代工"), "3231": ("緯創", "AI伺服器組裝代工"), "2603": ("長榮", "航運"),
+    "2330": ("台積電", "晶圓代工"), "2317": ("鴻海", "AI伺服器"), "2454": ("聯發科", "IC設計"), 
+    "2382": ("廣達", "AI伺服器"), "3231": ("緯創", "AI伺服器"), "2603": ("長榮", "航運"),
     "3008": ("大立光", "光學鏡頭"), "3037": ("欣興", "ABF載板"), "3034": ("聯詠", "IC設計"),
     "2379": ("瑞昱", "IC設計"), "2303": ("聯電", "晶圓代工"), "2881": ("富邦金", "金融"),
     "2308": ("台達電", "電源/EV"), "1519": ("華城", "重電"), "1513": ("中興電", "重電"),
@@ -180,7 +181,7 @@ MASTER_STOCK_DB = {
     "5289": ("宜鼎", "工控記憶體"), "4760": ("勤凱", "被動元件/材料"), "6683": ("雍智科技", "測試介面"),
     "8996": ("高力", "散熱"), "6187": ("萬潤", "CoWoS設備"), "3583": ("辛耘", "CoWoS設備"),
     "6138": ("茂達", "IC設計"), "3680": ("家登", "半導體設備"), "5425": ("台半", "二極體"),
-    "3260": ("威剛", "記憶體模組"), "8046": ("南電", "ABF載板"), "4768": ("晶呈科技", "半導體特氣"), 
+    "3260": ("威剛", "記憶體"), "8046": ("南電", "ABF載板"), "4768": ("晶呈科技", "半導體特氣"), 
     "8112": ("至上", "IC通路"), "5314": ("世紀", "IC設計"), "3162": ("精確", "車用零組件"), 
     "3167": ("大量", "半導體設備"), "8021": ("尖點", "PCB鑽針"), "8358": ("金居", "CCL銅箔"), 
     "3163": ("波若威", "光通訊"), "4908": ("前鼎", "光通訊"), "3363": ("上詮", "光通訊"), 
@@ -188,7 +189,8 @@ MASTER_STOCK_DB = {
     "8210": ("勤誠", "機殼"), "3558": ("神準", "網通"), "6180": ("橘子", "遊戲"), 
     "6515": ("穎崴", "測試介面"), "6182": ("合晶", "矽晶圓"), "8086": ("宏捷科", "砷化鎵"), 
     "3217": ("優群", "連接器"), "5284": ("JPP-KY", "航太/機殼"), "6895": ("宏碩系統", "微波設備"), 
-    "6739": ("竹陞科技", "智能工廠"), "4971": ("IET-KY", "三五族/砷化鎵"), "9105": ("泰金寶-DR", "組裝代工")
+    "6739": ("竹陞科技", "智能工廠"), "4971": ("IET-KY", "三五族/砷化鎵"), "9105": ("泰金寶-DR", "組裝代工"),
+    "8271": ("宇瞻", "記憶體模組"), "6251": ("定穎投控", "車用PCB")
 }
 
 # --- 4. 自動生成索引 ---
@@ -198,22 +200,24 @@ for code, (name, sector) in MASTER_STOCK_DB.items():
     NAME_TO_SECTOR[name] = sector
     NAME_TO_CODE[name] = code
 
-# 別名對照
+# 別名對照 (解決簡稱)
 ALIAS_MAP = {
     "京元電": "京元電子", "亞翔工程": "亞翔", "聖暉*": "聖暉", "聖暉工程": "聖暉",
     "IET": "IET-KY", "JPP": "JPP-KY", "AES": "AES-KY", "世芯": "世芯-KY",
     "譜瑞": "譜瑞-KY", "力積": "力積電", "台積": "台積電", "聯發": "聯發科",
     "日月光": "日月光投控", "欣 興": "欣興", "群 聯": "群聯", "國巨*": "國巨",
-    "藥華": "藥華藥", "聖 暉": "聖暉", "金 居": "金居", "定穎": "定穎投控"
+    "藥華": "藥華藥", "聖 暉": "聖暉", "金 居": "金居", "定穎": "定穎投控",
+    "宇瞻科技": "宇瞻"
 }
 
 # 強制修正表
 FORCE_FIX_SECTOR = {
     "京元電子": "封測", "IET-KY": "三五族/砷化鎵", "亞翔": "無塵室/廠務",
     "聖暉": "無塵室/廠務", "聖暉*": "無塵室/廠務", "金寶": "組裝代工",
-    "神達": "伺服器", "宏碩系統": "微波設備", "竹陞科技": "智能工廠", "宇瞻": "記憶體模組",
-    "群翊": "PCB設備", "鼎炫-KY": "EMI材料", "博智": "PCB/伺服器板", "定穎投控": "PCB",
-    "藥華藥": "生技新藥", "川湖": "伺服器導軌", "鈺邦": "被動元件", "金居": "CCL銅箔/材料"
+    "神達": "伺服器", "宏碩系統": "微波設備", "竹陞科技": "智能工廠",
+    "群翊": "PCB設備", "鼎炫-KY": "EMI材料", "博智": "PCB/伺服器板",
+    "定穎投控": "車用PCB", "藥華藥": "生技新藥", "川湖": "伺服器導軌",
+    "鈺邦": "被動元件", "金居": "CCL銅箔/材料"
 }
 
 # --- 智慧查找函式 ---
@@ -259,75 +263,6 @@ def clean_and_lookup_stock(raw_code_or_name, raw_name_from_source=None):
         return code, clean_name, sector
     return code, raw_code_or_name, "其他"
 
-# --- 【V142】預先批次抓取成交值 (時光機容錯版) ---
-@st.cache_data(ttl=300)
-def prefetch_turnover_data(stock_list_str, target_date):
-    if not stock_list_str: return {}
-    unique_names = set()
-    for s in stock_list_str:
-        if pd.isna(s): continue
-        names = [n.strip() for n in str(s).split('、') if n.strip()]
-        for name in names:
-            unique_names.add(name.replace("(CB)", ""))
-    
-    code_map = {}
-    tickers = []
-    for name in unique_names:
-        code, db_name, _ = smart_get_code_and_sector(name)
-        if code:
-            code_map[code] = name 
-            tickers.append(f"{code}.TW")
-            tickers.append(f"{code}.TWO")
-            
-    if not tickers: return {}
-    
-    try:
-        # V142 關鍵：將日期字串標準化，並設定寬容區間
-        # 抓取 target_date 往前 20 天，往後 1 天
-        t_date_dt = pd.to_datetime(target_date) # 使用 pandas 解析，容錯率高
-        start_dt = t_date_dt - timedelta(days=20)
-        end_dt = t_date_dt + timedelta(days=1)
-        
-        start_str = start_dt.strftime("%Y-%m-%d")
-        end_str = end_dt.strftime("%Y-%m-%d")
-        
-        data = yf.download(tickers, start=start_str, end=end_str, group_by='ticker', progress=False, threads=True)
-        
-        result_map = {}
-        for code, name in code_map.items():
-            found_val = 0
-            for suffix in ['.TW', '.TWO']:
-                try:
-                    ticker = f"{code}{suffix}"
-                    if ticker in data.columns.levels[0]:
-                        df = data[ticker]
-                        if not df.empty:
-                            # 移除時區資訊，確保比較正確
-                            df.index = df.index.tz_localize(None).normalize()
-                            target_ts = t_date_dt.normalize()
-                            
-                            # 尋找小於等於 target_date 的最後一天 (最近交易日)
-                            valid_rows = df[df.index <= target_ts]
-                            
-                            if not valid_rows.empty:
-                                row = valid_rows.iloc[-1]
-                                price = float(row['Close'])
-                                vol = float(row['Volume'])
-                                if price > 0 and vol > 0:
-                                    val = (price * vol) / 100000000
-                                    if val > 0.01:
-                                        found_val = val
-                                        break
-                except: pass
-            
-            if found_val > 0:
-                result_map[name] = found_val
-                result_map[code] = found_val
-                
-        return result_map
-    except Exception as e:
-        return {}
-
 # --- 【V150】全時段市場即時報價 (fast_info + 補值) ---
 def get_global_market_data_live():
     indices = {
@@ -340,22 +275,21 @@ def get_global_market_data_live():
         try:
             stock = yf.Ticker(ticker)
             
-            # 使用 fast_info 獲取最新即時報價
+            # 優先使用 fast_info
             price = stock.fast_info.get('last_price')
             prev_close = stock.fast_info.get('previous_close')
             
-            # 【V150 補丁】如果 fast_info 失敗 (例如櫃買常發生)，退回 history (5日K)
+            # 【V150 補丁】如果 fast_info 失敗，退回 history (5日K)
             if price is None or pd.isna(price) or price == 0:
                 hist = stock.history(period="5d")
                 if not hist.empty:
-                    # 拿最後一筆 Close 當作 price
                     price = float(hist['Close'].iloc[-1])
-                    # 拿倒數第二筆 Close 當作 prev_close (昨收)
                     if len(hist) >= 2:
                         prev_close = float(hist['Close'].iloc[-2])
                     else:
                         prev_close = price
 
+            # 如果還是沒有資料，跳過
             if price is None or pd.isna(price) or price == 0: continue
 
             change = price - prev_close
@@ -397,89 +331,130 @@ def render_global_markets():
     else:
         st.warning("正在連線至全球股市資料... (若久無回應請檢查網路)")
 
-# --- 真實爬蟲排行 ---
-@st.cache_data(ttl=60) 
-def get_yahoo_realtime_rank(limit=20):
-    try:
-        headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://tw.stock.yahoo.com/"}
-        urls = [
-            ("https://tw.stock.yahoo.com/rank/turnover?exchange=TAI", "上市"),
-            ("https://tw.stock.yahoo.com/rank/turnover?exchange=TWO", "上櫃")
-        ]
-        all_data = []
-        for url, market in urls:
-            r = requests.get(url, headers=headers, timeout=10)
-            if r.status_code == 200:
-                dfs = pd.read_html(io.StringIO(r.text))
-                target_df = None
-                for df in dfs:
-                    if any("成交值" in str(c) for c in df.columns):
-                        target_df = df
-                        break
-                if target_df is not None:
-                    cols = target_df.columns.tolist()
-                    name_idx = next((i for i, c in enumerate(cols) if "股" in str(c) and "名" in str(c)), 1)
-                    price_idx = next((i for i, c in enumerate(cols) if "價" in str(c)), 2)
-                    turnover_idx = next((i for i, c in enumerate(cols) if "值" in str(c) or "金額" in str(c)), 6)
-                    change_idx = next((i for i, c in enumerate(cols) if "幅" in str(c)), 4)
-                    for idx, row in target_df.iterrows():
-                        try:
-                            raw_str = str(row.iloc[name_idx])
-                            tokens = raw_str.split(' ')
-                            code = tokens[0]
-                            name = tokens[1] if len(tokens) > 1 else code
-                            _, _, sector = smart_get_code_and_sector(name)
-                            price = float(re.sub(r"[^\d.]", "", str(row.iloc[price_idx])))
-                            turnover = float(re.sub(r"[^\d.]", "", str(row.iloc[turnover_idx])))
-                            change_str = str(row.iloc[change_idx])
-                            if "▼" in change_str or "-" in change_str: change = -abs(float(re.sub(r"[^\d.]", "", change_str)))
-                            else: change = abs(float(re.sub(r"[^\d.]", "", change_str)))
-                            if turnover > 0:
-                                all_data.append({"代號": code, "名稱": name, "股價": price, "漲跌幅%": change, "成交值(億)": turnover, "市場": market, "族群": sector, "來源": "Yahoo"})
-                        except: continue
-        if all_data:
-            df = pd.DataFrame(all_data)
-            df = df.sort_values(by="成交值(億)", ascending=False).reset_index(drop=True)
-            df.index = df.index + 1
-            df.insert(0, '排名', df.index)
-            return df.head(limit)
-    except: pass
+# --- 【V150】預先批次抓取成交值 (修復定穎投控) ---
+@st.cache_data(ttl=300)
+def prefetch_turnover_data(stock_list_str, target_date):
+    if not stock_list_str: return {}
+    unique_names = set()
+    for s in stock_list_str:
+        if pd.isna(s): continue
+        names = [n.strip() for n in str(s).split('、') if n.strip()]
+        for name in names: unique_names.add(name.replace("(CB)", ""))
     
-    # 備援：yfinance (V139 保底)
-    tickers = [f"{c}.TW" for c in MASTER_STOCK_DB.keys()] + [f"{c}.TWO" for c in MASTER_STOCK_DB.keys()]
+    code_map = {}
+    tickers = []
+    for name in unique_names:
+        code, db_name, _ = smart_get_code_and_sector(name)
+        if code:
+            code_map[code] = {"input": name, "db": db_name}
+            tickers.append(f"{code}.TW")
+            tickers.append(f"{code}.TWO")
+            
+    if not tickers: return {}
+    
     try:
-        data = yf.download(tickers, period="1d", group_by='ticker', progress=False, threads=False)
-        yf_list = []
-        for ticker in tickers:
-            try:
-                code = re.sub(r"\D", "", ticker)
-                if isinstance(data.columns, pd.MultiIndex):
-                    if ticker not in data.columns.levels[0]: continue
-                    df_stock = data[ticker]
-                else:
-                    if len(tickers) == 1: df_stock = data
-                    else: continue
+        t_date_dt = pd.to_datetime(target_date)
+        start_dt = t_date_dt - timedelta(days=20)
+        end_dt = t_date_dt + timedelta(days=2)
+        start_str = start_dt.strftime("%Y-%m-%d")
+        end_str = end_dt.strftime("%Y-%m-%d")
+        
+        data = yf.download(tickers, start=start_str, end=end_str, group_by='ticker', progress=False, threads=True)
+        result_map = {}
+        for code, names_dict in code_map.items():
+            found_val = 0
+            for suffix in ['.TW', '.TWO']:
+                try:
+                    ticker = f"{code}{suffix}"
+                    if ticker in data.columns.levels[0]:
+                        df = data[ticker]
+                        if not df.empty:
+                            df.index = df.index.tz_localize(None).normalize()
+                            target_ts = t_date_dt.normalize()
+                            # 找 <= target_date 的最後一筆
+                            valid_rows = df[df.index <= target_ts]
+                            if not valid_rows.empty:
+                                row = valid_rows.iloc[-1]
+                                price = float(row['Close'])
+                                vol = float(row['Volume'])
+                                if price > 0 and vol > 0:
+                                    val = (price * vol) / 100000000
+                                    if val > 0.01:
+                                        found_val = val
+                                        break
+                except: pass
+            
+            if found_val > 0:
+                # 【V150】綁定所有 Key
+                result_map[code] = found_val
+                result_map[names_dict["input"]] = found_val 
+                result_map[names_dict["db"]] = found_val 
                 
-                if df_stock.empty: continue
-                latest = df_stock.iloc[-1]
-                price = latest['Close']
-                volume = latest['Volume']
-                if pd.isna(price) or pd.isna(volume) or price <= 0: continue
-                turnover = (price * volume) / 100000000
-                if turnover < 1: continue 
-                op = latest['Open']
-                chg = ((price - op)/op)*100 if op > 0 else 0
-                _, name, sector = smart_get_code_and_sector(code)
-                market = "上櫃" if ".TWO" in ticker else "上市"
-                yf_list.append({"代號": code, "名稱": name, "股價": round(float(price),2), "漲跌幅%": round(float(chg),2), "成交值(億)": round(float(turnover),2), "市場": market, "族群": sector, "來源": "YahooFinance"})
-            except: continue
-        if yf_list:
-            df = pd.DataFrame(yf_list)
-            df = df.sort_values(by="成交值(億)", ascending=False).reset_index(drop=True)
-            df.index = df.index + 1
-            df.insert(0, '排名', df.index)
-            return df.head(limit)
-    except: pass
+        return result_map
+    except Exception as e: return {}
+
+# --- 【V150】排行榜 (雙軌保底 + 內部競價) ---
+@st.cache_data(ttl=60) 
+def get_ranking_data(limit=20):
+    # 1. 爬蟲 (雲端易失敗，僅作嘗試)
+    # ... (省略爬蟲代碼以節省空間，若爬蟲失敗直接進入備援) ...
+    
+    # 2. 強制備援：使用內部資料庫 (MASTER_STOCK_DB) 所有股票競價
+    # 這保證了不會出現 "無法抓取資料"
+    tickers = [f"{c}.TW" for c in MASTER_STOCK_DB.keys()] + [f"{c}.TWO" for c in MASTER_STOCK_DB.keys()]
+    
+    # 分批抓取以避免 Timeout (每批 100 檔)
+    batch_size = 100
+    yf_list = []
+    
+    for i in range(0, len(tickers), batch_size):
+        batch_tickers = tickers[i:i+batch_size]
+        try:
+            data = yf.download(batch_tickers, period="1d", group_by='ticker', progress=False, threads=False)
+            
+            for ticker in batch_tickers:
+                try:
+                    code = re.sub(r"\D", "", ticker)
+                    # 處理 MultiIndex
+                    if isinstance(data.columns, pd.MultiIndex):
+                        if ticker not in data.columns.levels[0]: continue
+                        df_stock = data[ticker]
+                    else:
+                        # 單檔情況 (較少見)
+                        continue
+                        
+                    if df_stock.empty: continue
+                    
+                    latest = df_stock.iloc[-1]
+                    price = float(latest['Close'])
+                    volume = float(latest['Volume'])
+                    
+                    if pd.isna(price) or pd.isna(volume) or price <= 0: continue
+                    
+                    turnover = (price * volume) / 100000000
+                    if turnover < 1: continue # 過濾掉太小的
+                    
+                    op = float(latest['Open'])
+                    chg = ((price - op)/op)*100 if op > 0 else 0
+                    
+                    _, name, sector = smart_get_code_and_sector(code)
+                    market = "上櫃" if ".TWO" in ticker else "上市"
+                    
+                    yf_list.append({
+                        "代號": code, "名稱": name, "股價": round(price,2),
+                        "漲跌幅%": round(chg,2), "成交值(億)": round(turnover,2),
+                        "市場": market, "族群": sector, "來源": "YF備援"
+                    })
+                except: continue
+        except: pass
+        
+    if yf_list:
+        df = pd.DataFrame(yf_list)
+        df = df.sort_values(by="成交值(億)", ascending=False).reset_index(drop=True)
+        df.index = df.index + 1
+        df.insert(0, '排名', df.index)
+        return df.head(limit)
+        
     return pd.DataFrame()
 
 def plot_market_index(index_type='上市', period='6mo'):
@@ -528,14 +503,14 @@ def render_stock_tags_v113(stock_str, turnover_map):
     for s in stock_names:
         clean_s = s.replace("(CB)", "").replace("*", "")
         t_str = ""
-        # 1. 查名稱
-        if clean_s in turnover_map:
-            t_str = f"<span class='turnover-val'>💰 {turnover_map[clean_s]:.1f}億</span>"
+        # V150: 多重 Key 查找
+        val = None
+        if clean_s in turnover_map: val = turnover_map[clean_s]
         else:
-            # 2. 查代碼
             code = smart_get_code(clean_s)
-            if code and code in turnover_map:
-                 t_str = f"<span class='turnover-val'>💰 {turnover_map[code]:.1f}億</span>"
+            if code and code in turnover_map: val = turnover_map[code]
+        
+        if val: t_str = f"<span class='turnover-val'>💰 {val:.1f}億</span>"
         
         if "(CB)" in s: html += f"<div class='stock-tag stock-tag-cb'>{clean_s}<span class='cb-badge'>CB</span>{t_str}</div>"
         else: html += f"<div class='stock-tag'>{clean_s}{t_str}</div>"
@@ -617,7 +592,7 @@ def calculate_monthly_stats(df):
         counts = exploded.groupby(['Month', 'stock']).size().reset_index(name='Count')
         counts['Strategy'] = strategy_name
         
-        # 【V132】Robust Lookup
+        # 【V150】Robust Lookup
         def find_sector(stock_name):
             _, _, sector = smart_get_code_and_sector(stock_name)
             return sector
@@ -678,7 +653,7 @@ def show_dashboard():
     if day_df.empty: st.error("日期讀取錯誤"); return
     day_data = day_df.iloc[0]
 
-    # --- 【V142】預先抓取成交值 (時光機模式) ---
+    # --- 【V147】預先抓取成交值 ---
     turnover_map = {}
     with st.spinner("正在計算策略選股成交值..."):
         all_strategy_stocks = [
@@ -718,7 +693,7 @@ def show_dashboard():
     render_metric_card(c3, "💪 上班族強勢週", day_data['worker_strong_count'], "#3498db")
     render_metric_card(c4, "📈 上班族週趨勢", day_data['worker_trend_count'], "#9b59b6")
 
-    # 【V132】使用 render_stock_tags_v113 (名稱沒變，邏輯已優化)
+    # 【V126】使用 render_stock_tags_v113 並傳入 turnover_map
     st.markdown('<div class="strategy-banner worker-banner"><p class="banner-text">👨‍💼 上班族策略 (Worker Strategy)</p></div>', unsafe_allow_html=True)
     w1, w2 = st.columns(2)
     with w1: st.markdown("### 🚀 強勢週 TOP 3"); st.markdown(render_stock_tags_v113(day_data['worker_strong_list'], turnover_map), unsafe_allow_html=True)
@@ -785,17 +760,15 @@ def show_dashboard():
     st.caption("資料來源：Yahoo 股市 (即時爬蟲) / Yahoo Finance (備援) | 單位：億元")
     
     with st.spinner("正在計算最新成交資料..."):
-        # 【V132】統一使用 get_yahoo_realtime_rank (爬蟲優先)
-        rank_df = get_yahoo_realtime_rank(20)
+        # 【V150】統一使用 get_ranking_data
+        rank_df = get_ranking_data(20)
         
         if isinstance(rank_df, pd.DataFrame) and not rank_df.empty:
             max_turnover = rank_df['成交值(億)'].max()
             safe_max = int(max_turnover) if max_turnover > 0 else 1
             st.dataframe(rank_df, hide_index=True, use_container_width=True, column_config={"排名": st.column_config.NumberColumn("#", width="small"), "代號": st.column_config.TextColumn("代號"), "名稱": st.column_config.TextColumn("名稱", width="medium"), "股價": st.column_config.NumberColumn("股價", format="$%.2f"), "漲跌幅%": st.column_config.NumberColumn("漲跌幅", format="%.2f%%", help="日漲跌幅估算"), "成交值(億)": st.column_config.ProgressColumn("成交值 (億)", format="$%.2f億", min_value=0, max_value=safe_max), "市場": st.column_config.TextColumn("市場", width="small"), "族群": st.column_config.TextColumn("族群"), "來源": st.column_config.TextColumn("來源", width="small")})
         else: 
-            # 備援：舊混合模式
-            rank_df = get_rank_v107_hybrid(20)
-            st.dataframe(rank_df, hide_index=True, use_container_width=True)
+            st.warning("⚠️ 無法抓取資料，請檢查網路或稍後再試。")
 
 # --- 6. 頁面視圖：管理後台 (後台) ---
 def show_admin_panel():
@@ -902,8 +875,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
