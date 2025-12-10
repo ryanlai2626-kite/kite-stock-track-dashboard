@@ -328,8 +328,9 @@ def prefetch_turnover_data(stock_list_str, target_date):
     except Exception as e:
         return {}
 
-# --- 全球市場即時報價 ---
-@st.cache_data(ttl=60)
+# --- 全球市場即時報價 (V140: 自動刷新版) ---
+# 1. 修改：將快取時間縮短為 10 秒，確保資料即時性
+@st.cache_data(ttl=10)
 def get_global_market_data():
     try:
         indices = {"^TWII": "🇹🇼 加權指數", "^TWOII": "🇹🇼 櫃買指數", "^N225": "🇯🇵 日經225",
@@ -338,24 +339,31 @@ def get_global_market_data():
         for ticker, name in indices.items():
             try:
                 stock = yf.Ticker(ticker)
+                # 抓取最近 5 天以計算漲跌
                 hist = stock.history(period="5d")
                 if not hist.empty:
                     price = hist['Close'].iloc[-1]
                     prev_close = hist['Close'].iloc[-2] if len(hist) >= 2 else price
                     change = price - prev_close
                     pct_change = (change / prev_close) * 100
+                    
                     color_class = "up-color" if change > 0 else ("down-color" if change < 0 else "flat-color")
                     card_class = "card-up" if change > 0 else ("card-down" if change < 0 else "card-flat")
+                    
                     market_data.append({"name": name, "price": f"{price:,.0f}", "change": change, 
                                         "pct_change": pct_change, "color_class": color_class, "card_class": card_class})
             except: continue
         return market_data
     except: return []
 
+# 2. 修改：加入 @st.fragment 並設定 run_every=10 (每10秒自動刷新此區塊)
+# 注意：此功能需要 Streamlit 1.37.0 以上版本
+@st.fragment(run_every=10)
 def render_global_markets():
     markets = get_global_market_data()
     if markets:
         st.markdown("### 🌏 全球重要指數 (Real-time)")
+        st.caption(f"最後更新: {datetime.now().strftime('%H:%M:%S')} (每 10 秒自動更新)")
         cols = st.columns(len(markets))
         for i, m in enumerate(markets):
             with cols[i]:
@@ -873,3 +881,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
