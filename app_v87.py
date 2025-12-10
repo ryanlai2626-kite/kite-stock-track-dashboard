@@ -13,6 +13,7 @@ import requests
 import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import io
 
 # 修正 Pydantic 錯誤
 try:
@@ -20,8 +21,8 @@ try:
 except ImportError:
     from typing import TypedDict
 
-# --- 1. 頁面與 CSS (V106: 全球指數視覺大升級) ---
-st.set_page_config(layout="wide", page_title="StockTrack V106+ProUI", page_icon="🌏")
+# --- 1. 頁面與 CSS (V108: 修復變數定義錯誤) ---
+st.set_page_config(layout="wide", page_title="StockTrack V108", page_icon="🔥")
 
 st.markdown("""
 <style>
@@ -59,7 +60,7 @@ st.markdown("""
     .metric-label { font-size: 1.5rem !important; color: #666666 !important; font-weight: 600; }
     .metric-sub { font-size: 1.1rem !important; color: #888888 !important; font-weight: bold; margin-top: 5px; }
 
-    /* --- V106 新增：全球指數卡片樣式 --- */
+    /* --- 全球指數卡片樣式 --- */
     .market-card {
         background-color: #FFFFFF;
         border-radius: 10px;
@@ -81,7 +82,7 @@ st.markdown("""
         margin-bottom: 5px;
     }
     .market-price {
-        font-size: 2.0rem; /* 數字大一點 */
+        font-size: 2.0rem;
         font-weight: 900;
         margin: 5px 0;
         font-family: 'Roboto', sans-serif;
@@ -107,8 +108,7 @@ st.markdown("""
         }
         .metric-value { font-size: 2.2rem !important; }
         .metric-label { font-size: 1.2rem !important; }
-        
-        .market-price { font-size: 1.6rem; } /* 手機版指數數字縮小一點 */
+        .market-price { font-size: 1.6rem; } 
     }
 
     /* 5. 策略橫幅 */
@@ -142,7 +142,8 @@ st.markdown("""
     button[data-baseweb="tab"][aria-selected="true"] { background-color: #e3f2fd !important; border-bottom: 4px solid #3498db !important; }
     .stSelectbox label { font-size: 18px !important; color: #333333 !important; font-weight: bold !important; }
     .stSelectbox div[data-baseweb="select"] > div { background-color: #2c3e50 !important; color: white !important; }
-    .stSelectbox div[data-baseweb="select"] svg { fill: #FFFFFF !important; }
+    .stSelectbox div[data-baseweb="select"] > div * { color: #FFFFFF !important; }
+    .stSelectbox div[data-baseweb="select"] svg { fill: #FFFFFF !important; color: #FFFFFF !important; }
     li[role="option"] { background-color: #2c3e50 !important; color: #FFFFFF !important; }
     li[role="option"]:hover { background-color: #34495e !important; color: #f1c40f !important; }
 
@@ -163,29 +164,11 @@ if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
 
 class DailyRecord(TypedDict):
-    col_01: str
-    col_02: str
-    col_03: int
-    col_04: int
-    col_05: int
-    col_06: str
-    col_07: str
-    col_08: str
-    col_09: str
-    col_10: str
-    col_11: str
-    col_12: str
-    col_13: str
-    col_14: str
-    col_15: str
-    col_16: str
-    col_17: str
-    col_18: str
-    col_19: str
-    col_20: str
-    col_21: str
-    col_22: str
-    col_23: str
+    col_01: str; col_02: str; col_03: int; col_04: int; col_05: int
+    col_06: str; col_07: str; col_08: str; col_09: str; col_10: str
+    col_11: str; col_12: str; col_13: str; col_14: str; col_15: str
+    col_16: str; col_17: str; col_18: str; col_19: str; col_20: str
+    col_21: str; col_22: str; col_23: str
 
 generation_config = {
     "temperature": 0.0,
@@ -205,132 +188,8 @@ BACKUP_FILE = 'stock_data_backup.csv'
 
 # --- 3. 核心函數 ---
 
-# 【V101 核心】股名 -> 族群 直接對照表
-NAME_TO_SECTOR = {
-    # === 半導體權值 ===
-    "台積電": "晶圓代工", "聯電": "晶圓代工", "力積電": "晶圓代工", "世界": "晶圓代工",
-    "聯發科": "IC設計", "鴻海": "組裝代工", "日月光投控": "封測",
-    
-    # === 記憶體 & 模組 ===
-    "群聯": "記憶體控制", "威剛": "記憶體模組", "十銓": "記憶體模組", "宇瞻": "記憶體模組",
-    "宜鼎": "工控記憶體", "創見": "記憶體模組", "華邦電": "記憶體", "南亞科": "記憶體",
-    "旺宏": "記憶體", "愛普*": "IP/記憶體", "晶豪科": "記憶體IC",
-    
-    # === 散熱族群 ===
-    "奇鋐": "散熱", "雙鴻": "散熱", "健策": "散熱", "高力": "散熱",
-    "建準": "散熱", "力致": "散熱", "泰碩": "散熱", "元山": "散熱", 
-    "尼得科超眾": "散熱", "協禧": "散熱", "廣運": "散熱/自動化", "富世達": "軸承/散熱",
-    "動力-KY": "散熱", "萬在": "散熱",
-    
-    # === AI 伺服器 & 組裝 ===
-    "廣達": "AI伺服器", "緯創": "AI伺服器", "緯穎": "AI伺服器", "英業達": "AI伺服器",
-    "技嘉": "AI伺服器", "微星": "板卡/伺服器", "華碩": "AI伺服器", "仁寶": "組裝代工",
-    "和碩": "組裝代工", "宏碁": "AI PC", "神達": "伺服器",
-    "藍天": "NB代工",
-    
-    # === 機殼 & 導軌 ===
-    "勤誠": "機殼", "川湖": "導軌", "營邦": "機殼", "晟銘電": "機殼",
-    "迎廣": "機殼", "振發": "機殼", "富驊": "機殼", "旭品": "機殼",
-    
-    # === CPO / 光通訊 ===
-    "聯鈞": "CPO/光通訊", "聯亞": "光通訊", "華星光": "光通訊", "上詮": "光通訊",
-    "波若威": "光通訊", "光聖": "光通訊", "前鼎": "光通訊", "眾達-KY": "光通訊",
-    "光環": "光通訊", "創威": "光通訊", "訊芯-KY": "CPO封測", "台通": "光通訊",
-    "旺矽": "探針卡/CPO",
-    
-    # === IP / ASIC ===
-    "世芯-KY": "IP矽智財", "創意": "IP矽智財", "智原": "IP矽智財", "M31": "IP矽智財",
-    "力旺": "IP矽智財", "晶心科": "IP矽智財", "巨有科技": "IP矽智財", "金麗科": "IP矽智財",
-    
-    # === IC 設計 (中小型/飆股) ===
-    "神盾": "神盾集團", "安國": "神盾集團", "安格": "神盾集團", "迅杰": "神盾集團", "芯鼎": "神盾集團",
-    "祥碩": "高速傳輸", "譜瑞-KY": "高速傳輸", "信驊": "BMC", "新唐": "MCU",
-    "天鈺": "驅動IC", "聯詠": "驅動IC", "瑞昱": "網通IC", "矽力-KY": "電源IC",
-    "茂達": "電源IC", "致新": "電源IC", "通嘉": "電源IC", "偉詮電": "電源IC",
-    "原相": "感測IC", "義隆": "觸控IC", "敦泰": "驅動IC", "凌陽": "IC設計",
-    "聯陽": "IC設計", "揚智": "IC設計", "九暘": "達發集團", "達發": "網通IC",
-    "世紀": "IC設計",
-    
-    # === 重電 & 綠能 ===
-    "華城": "重電", "士電": "重電", "中興電": "重電", "亞力": "重電", "東元": "重電",
-    "大同": "重電", "森崴能源": "綠能", "雲豹能源": "綠能", "世紀鋼": "風電",
-    "上緯投控": "風電", "華新": "電線電纜", "大亞": "電線電纜", "合機": "電線電纜",
-    "宏泰": "電線電纜",
-    
-    # === 連接器 & 線束 ===
-    "良維": "連接器", "貿聯-KY": "連接器", "信邦": "連接器", "維熹": "連接器",
-    "宏致": "連接器", "優群": "連接器", "嘉澤": "連接器", "凡甲": "連接器",
-    "詮欣": "連接器", "胡連": "車用連接器", "正崴": "連接器",
-    
-    # === PCB / CCL / 載板 ===
-    "台光電": "CCL銅箔", "台燿": "CCL銅箔", "聯茂": "CCL銅箔",
-    "金像電": "PCB", "健鼎": "PCB", "定穎投控": "PCB", "博智": "PCB", "華通": "PCB",
-    "楠梓電": "PCB", "燿華": "PCB", "敬鵬": "車用PCB",
-    "欣興": "ABF載板", "南電": "ABF載板", "景碩": "ABF載板",
-    "富喬": "PCB材料", "建榮": "PCB材料", "德宏": "PCB材料", "尖點": "PCB鑽針",
-    "達興材料": "特用化學",
-    
-    # === 特用化學 / 氣體 ===
-    "晶呈科技": "半導體特氣", "上品": "氟素設備", "三福化": "特用化學",
-    "中華化": "特用化學", "永光": "特用化學", "勝一": "特用化學",
-    
-    # === 被動元件 / 材料 ===
-    "國巨": "被動元件", "華新科": "被動元件", "勤凱": "被動元件/材料", "立隆電": "被動元件",
-    "信昌電": "被動元件", "禾伸堂": "被動元件", "凱美": "被動元件", "大毅": "被動元件",
-    
-    # === 電池 & 車用 ===
-    "AES-KY": "電池模組", "順達": "電池模組", "新普": "電池模組", "加百裕": "電池模組",
-    "台達電": "電源/EV", "康舒": "電源", "飛宏": "充電樁", "立德": "電源",
-    "精確": "車用零組件", "劍麟": "車用零組件", "堤維西": "AM車燈", "東陽": "AM汽材",
-    "帝寶": "AM車燈", "耿鼎": "AM鈑金",
-    
-    # === 設備 & 檢測 (CoWoS) ===
-    "弘塑": "CoWoS設備", "辛耘": "CoWoS設備", "萬潤": "CoWoS設備", "均華": "CoWoS設備",
-    "家登": "光罩盒", "致茂": "檢測設備", "閎康": "檢測分析", "宜特": "檢測分析",
-    "京鼎": "設備", "帆宣": "設備", "亞翔": "廠務", "漢唐": "廠務",
-    "大量": "PCB/半導體設備", "志聖": "PCB/半導體設備", "均豪": "半導體設備",
-    "鈦昇": "半導體設備", "群翊": "PCB設備", "牧德": "檢測設備",
-    "瑞耘": "設備零組件", "千附精密": "設備零組件",
-    
-    # === 測試介面 ===
-    "雍智科技": "測試介面", "精測": "測試介面", "穎崴": "測試介面", "旺矽": "探針卡",
-    "中探針": "探針",
-    
-    # === 系統整合 & IPC ===
-    "三商電": "系統整合", "精誠": "系統整合", "零壹": "資安", "邁達特": "系統整合",
-    "凌華": "IPC/機器人", "樺漢": "IPC", "研華": "IPC", "廣積": "IPC", "友通": "IPC",
-    "立端": "網安IPC", "安勤": "IPC", "新漢": "IPC", "振樺電": "IPC",
-    "至上": "IC通路", "文曄": "IC通路", "大聯大": "IC通路",
-    
-    # === 機器人概念 ===
-    "所羅門": "機器人", "羅昇": "機器人", "盟立": "機器人", "昆盈": "機器人",
-    "廣明": "機器人", "聰泰": "機器人", "圓剛": "機器人",
-    
-    # === 網通 ===
-    "智邦": "網通", "中磊": "網通", "啟碁": "網通", "明泰": "網通", "正文": "網通",
-    "合勤控": "網通", "神準": "網通", "智易": "網通",
-    
-    # === 生技 ===
-    "保瑞": "生技CDMO", "美時": "生技", "藥華藥": "生技", "合一": "生技",
-    "北極星藥業-KY": "生技", "智擎": "生技", "台康生技": "生技",
-    
-    # === 航運 ===
-    "長榮": "貨櫃航運", "陽明": "貨櫃航運", "萬海": "貨櫃航運",
-    "長榮航": "航空", "華航": "航空", "星宇航空": "航空",
-    "裕民": "散裝", "慧洋-KY": "散裝",
-    
-    # === 金融 ===
-    "富邦金": "金融", "國泰金": "金融", "中信金": "金融", "兆豐金": "金融",
-    "開發金": "金融", "元大金": "金融", "玉山金": "金融",
-    
-    # === 其他常見 ===
-    "元太": "電子紙", "亞光": "光學", "先進光": "光學", "大立光": "光學",
-    "中鋼": "鋼鐵", "台泥": "水泥", "統一": "食品",
-    "美利達": "自行車", "巨大": "自行車", "豐泰": "製鞋", "寶成": "製鞋",
-    "京元電子": "封測", "京元電": "封測", "IET-KY": "砷化鎵"
-}
-
-# 【V101 核心】代碼與族群對照 (用於排行榜)
+# 【V108 核心】代碼與族群對照 (Code -> (Name, Sector))
+# 包含您指定的熱門股與權值股
 TW_STOCK_INFO = {
     # 權值/熱門 (上市)
     "2330": ("台積電", "晶圓代工"), "2317": ("鴻海", "AI伺服器"), "2454": ("聯發科", "IC設計"), 
@@ -344,6 +203,15 @@ TW_STOCK_INFO = {
     "3661": ("世芯-KY", "IP矽智財"), "3017": ("奇鋐", "散熱"), "3324": ("雙鴻", "散熱"),
     "2345": ("智邦", "網通"), "3711": ("日月光投控", "封測"), "2368": ("金像電", "PCB"),
     "2383": ("台光電", "CCL銅箔"), "6213": ("聯茂", "CCL銅箔"), "6805": ("富世達", "軸承/散熱"),
+    "2353": ("宏碁", "AI PC"), "2324": ("仁寶", "組裝代工"), "2301": ("光寶科", "電源"),
+    "2327": ("國巨", "被動元件"), "2344": ("華邦電", "記憶體"), "2408": ("南亞科", "記憶體"),
+    "8110": ("華東", "封測"), "1605": ("華新", "電線電纜"), "2609": ("陽明", "航運"),
+    "2615": ("萬海", "航運"), "1503": ("士電", "重電"), "1504": ("東元", "重電"),
+    "1815": ("富喬", "PCB材料"), "2376": ("技嘉", "板卡/伺服器"), "2377": ("微星", "板卡"),
+    "2492": ("華新科", "被動元件"), "3044": ("健鼎", "PCB"), "4958": ("臻鼎-KY", "PCB"),
+    "4938": ("和碩", "組裝代工"), "9958": ("世紀鋼", "風電"), "6415": ("矽力-KY", "IC設計"),
+    "3406": ("玉晶光", "光學鏡頭"), "2409": ("友達", "面板"), "3481": ("群創", "面板"),
+    "3406": ("玉晶光", "光學鏡頭"), "6239": ("力成", "封測"), "6770": ("力積電", "晶圓代工"),
     
     # 權值/熱門 (上櫃)
     "8299": ("群聯", "記憶體控制"), "8069": ("元太", "電子紙"), "6488": ("環球晶", "矽晶圓"),
@@ -355,26 +223,64 @@ TW_STOCK_INFO = {
     "5289": ("宜鼎", "工控記憶體"), "4760": ("勤凱", "被動元件/材料"), "6683": ("雍智科技", "測試介面"),
     "8996": ("高力", "散熱"), "6187": ("萬潤", "CoWoS設備"), "3583": ("辛耘", "CoWoS設備"),
     "6138": ("茂達", "IC設計"), "3680": ("家登", "半導體設備"), "5425": ("台半", "二極體"),
-    "3260": ("威剛", "記憶體"), "8046": ("南電", "ABF載板")
+    "3260": ("威剛", "記憶體"), "8046": ("南電", "ABF載板"), 
+    "4768": ("晶呈科技", "半導體特氣"), "8112": ("至上", "IC通路"), "5314": ("世紀", "IC設計"),
+    "3162": ("精確", "車用零組件"), "4971": ("IET-KY", "砷化鎵"), "3167": ("大量", "半導體設備"),
+    "8021": ("尖點", "PCB鑽針"), "8358": ("金居", "CCL銅箔"), "3163": ("波若威", "光通訊"),
+    "4908": ("前鼎", "光通訊"), "3363": ("上詮", "光通訊"), "4961": ("天鈺", "IC設計"),
+    "6279": ("胡連", "車用連接器"), "3693": ("營邦", "機殼"), "8210": ("勤誠", "機殼"),
+    "3558": ("神準", "網通"), "6180": ("橘子", "遊戲"), "6515": ("穎崴", "測試介面"),
+    "6182": ("合晶", "矽晶圓"), "8086": ("宏捷科", "砷化鎵"), "3217": ("優群", "連接器")
 }
+
+# 【V108 修復】自動產生 NAME_TO_SECTOR (解決 NameError)
+NAME_TO_SECTOR = {}
+for code, (name, sector) in TW_STOCK_INFO.items():
+    NAME_TO_SECTOR[name] = sector
 
 # 輔助函式：取得名稱
 def get_stock_name(code):
-    clean_code = code.replace("(CB)", "").strip()
+    clean_code = str(code).replace("(CB)", "").strip()
     return TW_STOCK_INFO.get(clean_code, (clean_code, "其他"))[0]
 
 # 輔助函式：取得族群 (支援從代號或名稱反查)
 def get_stock_sector(identifier):
-    clean_id = identifier.replace("(CB)", "").strip()
-    if clean_id in TW_STOCK_INFO: return TW_STOCK_INFO[clean_id][1]
-    if clean_id in NAME_TO_SECTOR: return NAME_TO_SECTOR[clean_id]
+    clean_id = str(identifier).replace("(CB)", "").strip()
+    
+    # 1. 嘗試用代號查
+    if clean_id in TW_STOCK_INFO:
+        return TW_STOCK_INFO[clean_id][1]
+    
+    # 2. 嘗試用名稱查 (反向搜尋 NAME_TO_SECTOR)
+    if clean_id in NAME_TO_SECTOR:
+        return NAME_TO_SECTOR[clean_id]
+            
     return "其他"
 
-# --- 【V104 新增】全球市場即時報價 (強制歷史數據法) ---
+# 【V108】統一清洗與查表函式 (修復 8358O 亂碼問題)
+def clean_and_lookup_stock(raw_code_or_name, raw_name_from_source=None):
+    # 1. 暴力清洗：只保留數字 (解決 8358O, 2454.TW)
+    code = re.sub(r"\D", "", str(raw_code_or_name))
+    
+    # 2. 優先查代號
+    if code and code in TW_STOCK_INFO:
+        return code, TW_STOCK_INFO[code][0], TW_STOCK_INFO[code][1]
+    
+    # 3. 查不到代號，嘗試用傳入的中文名稱反查 (解決 Yahoo 爬蟲只有中文名的狀況)
+    if raw_name_from_source:
+        sector = NAME_TO_SECTOR.get(raw_name_from_source, "其他")
+        # 嘗試反查代號 (非必要，但有助於一致性)
+        for c, info in TW_STOCK_INFO.items():
+            if info[0] == raw_name_from_source:
+                return c, info[0], info[1]
+        return code, raw_name_from_source, sector
+        
+    return code, raw_code_or_name, "其他"
+
+# --- 【V104 修復版】全球市場即時報價 ---
 @st.cache_data(ttl=60)
 def get_global_market_data():
     try:
-        # 定義要抓取的指數 (代號: 顯示名稱)
         indices = {
             "^TWII": "🇹🇼 加權指數",
             "^TWOII": "🇹🇼 櫃買指數",
@@ -383,181 +289,180 @@ def get_global_market_data():
             "^IXIC": "🇺🇸 那斯達克",
             "^SOX": "🇺🇸 費城半導體"
         }
-        
         market_data = []
-        
-        # 逐一抓取 (避免批次失敗影響全部)
         for ticker, name in indices.items():
             try:
                 stock = yf.Ticker(ticker)
-                
-                # 【關鍵修正】強制使用 history 抓取，不依賴 fast_info (容易 nan)
-                hist = stock.history(period="5d") # 抓 5 天以防假日
-                
+                hist = stock.history(period="5d") # 強制抓歷史
                 if not hist.empty:
-                    # 最新價 = 最後一筆 Close
                     price = hist['Close'].iloc[-1]
+                    if len(hist) >= 2: prev_close = hist['Close'].iloc[-2]
+                    else: prev_close = price
                     
-                    # 前一日收盤 = 倒數第二筆 Close (用來算漲跌)
-                    if len(hist) >= 2:
-                        prev_close = hist['Close'].iloc[-2]
-                    else:
-                        prev_close = price # 資料不足，無法計算漲跌
-                    
-                    # 計算漲跌
                     change = price - prev_close
                     pct_change = (change / prev_close) * 100
                     
-                    # 顏色邏輯：漲=紅, 跌=綠, 平=灰
                     color_class = "flat-color"
                     if change > 0: color_class = "up-color"
                     elif change < 0: color_class = "down-color"
                     
-                    # 卡片邊框邏輯
                     card_class = "card-flat"
                     if change > 0: card_class = "card-up"
                     elif change < 0: card_class = "card-down"
                     
                     market_data.append({
                         "name": name,
-                        "price": f"{price:,.0f}", # 指數整數位
+                        "price": f"{price:,.0f}",
                         "change": change,
                         "pct_change": pct_change,
                         "color_class": color_class,
                         "card_class": card_class
                     })
-            except:
-                continue # 略過失敗的指數
-                
+            except: continue
         return market_data
     except: return []
 
-# --- 【V106 新增】渲染美化後的全球指數卡片 ---
+# --- 顯示全球市場區塊 (V106 卡片風格) ---
 def render_global_markets():
     markets = get_global_market_data()
-    
-    if not markets:
-        st.warning("暫時無法取得全球市場數據 (請稍後再試)")
-        return
-
-    st.markdown("### 🌏 全球重要指數 (Real-time)")
-    
-    # 使用 CSS Grid 或 Columns 排版
-    cols = st.columns(len(markets))
-    
-    for i, m in enumerate(markets):
-        with cols[i]:
-            # 使用 HTML/CSS 自定義卡片
-            st.markdown(f"""
-            <div class="market-card {m['card_class']}">
-                <div class="market-name">{m['name']}</div>
-                <div class="market-price {m['color_class']}">{m['price']}</div>
-                <div class="market-change {m['color_class']}">
-                    {m['change']:+.0f} ({m['pct_change']:+.2f}%)
+    if markets:
+        st.markdown("### 🌏 全球重要指數 (Real-time)")
+        cols = st.columns(len(markets))
+        for i, m in enumerate(markets):
+            with cols[i]:
+                st.markdown(f"""
+                <div class="market-card {m['card_class']}">
+                    <div class="market-name">{m['name']}</div>
+                    <div class="market-price {m['color_class']}">{m['price']}</div>
+                    <div class="market-change {m['color_class']}">
+                        {m['change']:+.0f} ({m['pct_change']:+.2f}%)
+                    </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
-    st.divider()
+                """, unsafe_allow_html=True)
+        st.divider()
 
-# --- 排行榜抓取 (V101: 暴力修正 "8299O" 問題) ---
+# --- 【V107+V108】混合模式：爬蟲優先 -> yfinance 備援 (修正亂碼) ---
 @st.cache_data(ttl=60) 
-def get_rank_v93_accurate(limit=20):
+def get_rank_v107_hybrid(limit=20):
+    
+    # 1. 嘗試爬取 Yahoo 股市網頁
     try:
-        tickers = [f"{code}.TW" for code in TW_STOCK_INFO.keys()] + \
-                  [f"{code}.TWO" for code in TW_STOCK_INFO.keys()]
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "Referer": "https://tw.stock.yahoo.com/"
+        }
+        
+        urls = [
+            ("https://tw.stock.yahoo.com/rank/turnover?exchange=TAI", "上市"),
+            ("https://tw.stock.yahoo.com/rank/turnover?exchange=TWO", "上櫃")
+        ]
+        
+        scraped_data = []
+        
+        for url, market in urls:
+            try:
+                r = requests.get(url, headers=headers, timeout=6)
+                if r.status_code == 200:
+                    dfs = pd.read_html(io.StringIO(r.text))
+                    target_df = None
+                    for df in dfs:
+                        cols = [str(c) for c in df.columns]
+                        if any("成交值" in c for c in cols) or any("成交金額" in c for c in cols):
+                            target_df = df
+                            break
+                    
+                    if target_df is not None:
+                        cols = target_df.columns.tolist()
+                        name_idx = next((i for i, c in enumerate(cols) if "股" in str(c) and "名" in str(c)), 1)
+                        price_idx = next((i for i, c in enumerate(cols) if "股價" in str(c)), 2)
+                        turnover_idx = next((i for i, c in enumerate(cols) if "值" in str(c) or "金額" in str(c)), 6)
+                        
+                        for idx, row in target_df.iterrows():
+                            try:
+                                raw_str = str(row.iloc[name_idx])
+                                tokens = raw_str.split(' ')
+                                raw_code = tokens[0]
+                                raw_name = tokens[1] if len(tokens) > 1 else raw_code
+                                
+                                # 【V108】使用統一清洗函數
+                                code, name, sector = clean_and_lookup_stock(raw_code, raw_name)
+                                
+                                price = float(str(row.iloc[price_idx]).replace(',', ''))
+                                
+                                raw_turnover = str(row.iloc[turnover_idx])
+                                turnover = float(re.sub(r"[^\d.]", "", raw_turnover))
+                                
+                                # 漲跌幅簡化處理
+                                change = 0.0
+                                
+                                if turnover > 0:
+                                    scraped_data.append({
+                                        "代號": code, "名稱": name, "股價": price,
+                                        "漲跌幅%": change, "成交值(億)": turnover,
+                                        "市場": market, "族群": sector, "來源": "Yahoo爬蟲"
+                                    })
+                            except: continue
+            except: pass
+            
+        if len(scraped_data) > 10:
+            df = pd.DataFrame(scraped_data)
+            df = df.sort_values(by="成交值(億)", ascending=False).reset_index(drop=True)
+            df.index = df.index + 1
+            df.insert(0, '排名', df.index)
+            return df.head(limit)
+            
+    except Exception as e:
+        print(f"Scraping failed: {e}")
+
+    # 2. 備援機制：yfinance (使用 V108 完整名單)
+    tickers = [f"{c}.TW" for c in TW_STOCK_INFO.keys()] + [f"{c}.TWO" for c in TW_STOCK_INFO.keys()]
+    
+    try:
         data = yf.download(tickers, period="1d", group_by='ticker', progress=False, threads=True)
-        result_list = []
+        yf_list = []
+        
         for ticker in tickers:
             try:
-                # 【V101 關鍵修正】暴力清洗代碼，只保留數字
-                code = re.sub(r"\D", "", ticker) 
+                # 【V108】暴力清洗 ticker (例如 8358.TWO -> 8358)
+                code = re.sub(r"\D", "", ticker)
+                
                 if ticker not in data.columns.levels[0]: continue
                 df_stock = data[ticker]
                 if df_stock.empty: continue
+                
                 latest = df_stock.iloc[-1]
                 price = latest['Close']
-                volume = latest['Volume'] 
+                volume = latest['Volume']
+                
                 if pd.isna(price) or pd.isna(volume) or price <= 0: continue
-                turnover_yi = (price * volume) / 100000000
-                if turnover_yi < 1: continue 
-                open_price = latest['Open']
-                if pd.notna(open_price) and open_price > 0: change_pct = ((price - open_price) / open_price) * 100
-                else: change_pct = 0.0
-                info = TW_STOCK_INFO.get(code, (code, "其他"))
-                name = info[0]; sector = info[1]
+                
+                turnover = (price * volume) / 100000000
+                if turnover < 1: continue
+                
+                op = latest['Open']
+                chg = ((price - op)/op)*100 if op > 0 else 0
+                
+                # 【V108】查表
+                _, name, sector = clean_and_lookup_stock(code)
                 market = "上櫃" if ".TWO" in ticker else "上市"
-                result_list.append({"代號": code, "名稱": name, "股價": float(price), "漲跌幅%": float(change_pct), "成交值(億)": float(turnover_yi), "市場": market, "族群": sector})
+                
+                yf_list.append({
+                    "代號": code, "名稱": name, "股價": round(float(price),2),
+                    "漲跌幅%": round(float(chg),2), "成交值(億)": round(float(turnover),2),
+                    "市場": market, "族群": sector, "來源": "YahooFinance"
+                })
             except: continue
-        if not result_list: return "目前無法取得市場數據"
-        df_rank = pd.DataFrame(result_list)
-        df_rank = df_rank.sort_values(by="成交值(億)", ascending=False).reset_index(drop=True)
-        df_rank.index = df_rank.index + 1
-        df_rank.insert(0, '排名', df_rank.index)
-        df_rank['成交值(億)'] = df_rank['成交值(億)'].round(2)
-        df_rank['股價'] = df_rank['股價'].round(1)
-        df_rank['漲跌幅%'] = df_rank['漲跌幅%'].round(2)
-        return df_rank.head(limit)
-    except Exception as e: return f"System Error: {str(e)}"
-
-# --- 【V102 專業版】繪製 大盤指數 K 線圖 ---
-def plot_market_index(index_type='上市', period='6mo'):
-    ticker_map = {'上市': '^TWII', '上櫃': '^TWOII'}
-    ticker = ticker_map.get(index_type, '^TWII')
-    try:
-        stock = yf.Ticker(ticker)
-        df = stock.history(period=period)
-        if df.empty: return None, f"無法取得 {index_type} 指數資料"
-
-        # 計算均線 (新增 MA10)
-        df['MA5'] = df['Close'].rolling(window=5).mean()
-        df['MA10'] = df['Close'].rolling(window=10).mean() # 新增
-        df['MA20'] = df['Close'].rolling(window=20).mean()
-        df['MA60'] = df['Close'].rolling(window=60).mean()
-
-        # 建立雙軸圖表
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, 
-                            subplot_titles=(f'{index_type}指數', '成交量'), 
-                            row_width=[0.2, 0.8]) # 調整高度比例
-
-        # K線圖 (Row 1)
-        fig.add_trace(go.Candlestick(
-            x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
-            name='K線', increasing_line_color='#ef5350', decreasing_line_color='#26a69a'
-        ), row=1, col=1)
-
-        # 均線 (Row 1) - 專業配色與線條
-        fig.add_trace(go.Scatter(x=df.index, y=df['MA5'], line=dict(color='#9C27B0', width=1.5), name='MA5 (週)'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['MA10'], line=dict(color='#FFC107', width=1.5), name='MA10 (雙週)'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['MA20'], line=dict(color='#2196F3', width=1.5), name='MA20 (月)'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['MA60'], line=dict(color='#4CAF50', width=1.5), name='MA60 (季)'), row=1, col=1)
-
-        # 成交量 (Row 2)
-        colors = ['#ef5350' if row['Open'] - row['Close'] <= 0 else '#26a69a' for index, row in df.iterrows()]
-        fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=colors, name='成交量'), row=2, col=1)
-
-        # 專業版面設定
-        fig.update_layout(
-            height=600, # 增加高度
-            margin=dict(l=20, r=20, t=40, b=20),
-            paper_bgcolor='white', plot_bgcolor='#FAFAFA', # 極淡灰背景
-            font=dict(family="Arial, sans-serif", size=12, color='#333333'),
-            legend=dict(
-                orientation="h", yanchor="top", y=0.99, xanchor="left", x=0.01, # 圖例移至內部左上
-                bgcolor="rgba(255, 255, 255, 0.8)", bordercolor="#E0E0E0", borderwidth=1
-            ),
-            xaxis_rangeslider_visible=False,
-            hovermode='x unified' # 【關鍵】統一顯示十字準線資訊
-        )
-        
-        # 細緻格線設定
-        grid_style = dict(showgrid=True, gridwidth=1, gridcolor='#F0F0F0')
-        fig.update_xaxes(**grid_style, row=1, col=1)
-        fig.update_yaxes(**grid_style, title='指數', row=1, col=1)
-        fig.update_xaxes(**grid_style, row=2, col=1)
-        fig.update_yaxes(**grid_style, title='量', row=2, col=1)
-
-        return fig, ""
-    except Exception as e: return None, f"繪圖錯誤: {str(e)}"
+            
+        if yf_list:
+            df = pd.DataFrame(yf_list)
+            df = df.sort_values(by="成交值(億)", ascending=False).reset_index(drop=True)
+            df.index = df.index + 1
+            df.insert(0, '排名', df.index)
+            return df.head(limit)
+            
+    except: pass
+    
+    return "無法取得資料 (爬蟲與API皆失敗)"
 
 # --- UI 輔助函數 ---
 def render_metric_card(col, label, value, color_border="gray", sub_value=""):
@@ -684,7 +589,7 @@ def ai_analyze_v86(image):
         return response.text
     except Exception as e: return json.dumps({"error": str(e)})
 
-# --- 【V100 修正】計算月度風雲榜 (使用新版 NAME_TO_SECTOR 反查) ---
+# --- 【V108 修正】計算月度風雲榜 (使用 Name-Based 查表) ---
 def calculate_monthly_stats(df):
     if df.empty: return pd.DataFrame()
     df['dt'] = pd.to_datetime(df['date'], errors='coerce')
@@ -707,13 +612,8 @@ def calculate_monthly_stats(df):
         counts = exploded.groupby(['Month', 'stock']).size().reset_index(name='Count')
         counts['Strategy'] = strategy_name
         
-        # 【V100 更新】使用 Name-Based 字典反查
-        def find_sector(stock_name):
-            clean_name = stock_name.replace("(CB)", "").strip()
-            # 直接查名詞表
-            return NAME_TO_SECTOR.get(clean_name, "其他")
-            
-        counts['Industry'] = counts['stock'].apply(find_sector)
+        # 【V108】從名稱查族群
+        counts['Industry'] = counts['stock'].apply(get_stock_sector)
         
         all_stats.append(counts)
         
@@ -738,20 +638,9 @@ def show_dashboard():
 
     st.markdown(f"""<div class="title-box"><h1 style='margin:0; font-size: 2.8rem;'>📅 {selected_date} 市場戰情室</h1><p style='margin-top:10px; opacity:0.9;'>資料更新於: {day_data['last_updated']}</p></div>""", unsafe_allow_html=True)
 
-    # 全球市場報價牆 (V106 優化版)
+    # 全球市場報價牆 (V108 回歸卡片式)
     render_global_markets()
 
-    # K線圖區塊
-    with st.expander("📊 大盤指數走勢圖 (點擊展開)", expanded=True):
-        col_m1, col_m2 = st.columns([1, 4])
-        with col_m1:
-            market_type = st.radio("選擇市場", ["上市", "上櫃"], horizontal=True)
-            market_period = st.selectbox("週期", ["1mo", "3mo", "6mo", "1y"], index=2, key="market_period")
-        with col_m2:
-            fig, err = plot_market_index(market_type, market_period)
-            if fig: st.plotly_chart(fig, use_container_width=True)
-            else: st.warning(err)
-            
     st.divider()
 
     c1, c2, c3, c4 = st.columns(4)
@@ -804,7 +693,7 @@ def show_dashboard():
         grouped_chart = alt.Chart(monthly_wind).mark_bar().encode(x=alt.X('Month:O', title='月份', axis=axis_config), y=alt.Y('days:Q', title='天數', axis=axis_config), color=alt.Color('wind:N', title='風度', sort=group_order, scale=alt.Scale(domain=['無風', '陣風', '亂流', '強風'], range=['#2ecc71', '#f1c40f', '#9b59b6', '#e74c3c']), legend=legend_config), xOffset=alt.XOffset('wind:N', sort=group_order), tooltip=['Month', 'wind', 'days']).properties(height=450).configure(background='white').interactive()
         st.altair_chart(grouped_chart, use_container_width=True)
 
-    # --- 【V100 更新】策略選股月度風雲榜 ---
+    # --- 【V108 更新】策略選股月度風雲榜 ---
     st.markdown("---")
     st.header("🏆 策略選股月度風雲榜")
     st.caption("統計各策略下，股票出現的次數與所屬族群。")
@@ -838,18 +727,46 @@ def show_dashboard():
     else:
         st.info("累積足夠資料後，將在此顯示統計排行。")
 
-    # --- 權值股排行 (V93邏輯 + V101暴力清洗) ---
+    # --- 權值股排行 (V107邏輯: 爬蟲+擴充備援) ---
     st.markdown("---")
     st.header("🔥 今日市場重點監控 (權值股/熱門股 成交值排行)")
-    st.caption("資料來源：Yahoo Finance (監控前 200 大活躍股，即時運算) | 單位：億元")
+    st.caption("資料來源：Yahoo 股市 (即時爬蟲) / Yahoo Finance (備援) | 單位：億元")
     
     with st.spinner("正在計算最新成交資料..."):
-        rank_df = get_rank_v93_accurate(20)
+        # 呼叫 V107 混合爬蟲
+        rank_df = get_rank_v107_hybrid(20)
+        
         if isinstance(rank_df, pd.DataFrame) and not rank_df.empty:
             max_turnover = rank_df['成交值(億)'].max()
             safe_max = int(max_turnover) if max_turnover > 0 else 1
-            st.dataframe(rank_df, hide_index=True, use_container_width=True, column_config={"排名": st.column_config.NumberColumn("#", width="small"), "代號": st.column_config.TextColumn("代號"), "名稱": st.column_config.TextColumn("名稱", width="medium"), "股價": st.column_config.NumberColumn("股價", format="$%.1f"), "漲跌幅%": st.column_config.NumberColumn("漲跌幅", format="%.2f%%", help="日漲跌幅估算"), "成交值(億)": st.column_config.ProgressColumn("成交值 (億)", format="$%.2f億", min_value=0, max_value=safe_max), "市場": st.column_config.TextColumn("市場", width="small"), "族群": st.column_config.TextColumn("族群")})
-        else: st.warning(f"⚠️ 無法抓取資料：{rank_df}")
+            
+            st.dataframe(
+                rank_df,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "排名": st.column_config.NumberColumn("#", width="small"),
+                    "代號": st.column_config.TextColumn("代號"),
+                    "名稱": st.column_config.TextColumn("名稱", width="medium"),
+                    "股價": st.column_config.NumberColumn("股價", format="$%.2f"),
+                    "漲跌幅%": st.column_config.NumberColumn(
+                        "漲跌幅", 
+                        format="%.2f%%",
+                        help="日漲跌幅估算" 
+                    ),
+                    "成交值(億)": st.column_config.ProgressColumn(
+                        "成交值 (億)",
+                        format="$%.2f億",
+                        min_value=0,
+                        max_value=safe_max
+                    ),
+                    "市場": st.column_config.TextColumn("市場", width="small"),
+                    "族群": st.column_config.TextColumn("族群"),
+                    "來源": st.column_config.TextColumn("來源", width="small")
+                }
+            )
+        else:
+            st.warning(f"⚠️ 無法抓取資料：{rank_df}")
 
 # --- 6. 頁面視圖：管理後台 (後台) ---
 def show_admin_panel():
