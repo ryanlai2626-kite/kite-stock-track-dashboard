@@ -9,6 +9,10 @@ import time
 from datetime import datetime
 import altair as alt
 import shutil
+import requests
+import yfinance as yf
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # 修正 Pydantic 錯誤
 try:
@@ -16,14 +20,14 @@ try:
 except ImportError:
     from typing import TypedDict
 
-# --- 1. 頁面與 CSS (V77: 下拉選單字體顏色終極修正) ---
-st.set_page_config(layout="wide", page_title="StockTrack V77+MenuFix", page_icon="🛠️")
+# --- 1. 頁面與 CSS (V103: 全球指數抓取修復版) ---
+st.set_page_config(layout="wide", page_title="StockTrack V103+GlobalFix", page_icon="🌏")
 
 st.markdown("""
 <style>
     /* 1. 全域背景 (淺灰藍) 與深色文字 */
     .stApp {
-        background-color: #F4F6F9 !important;
+        background-color: #e8e8e8 !important;
         color: #333333 !important;
         font-family: 'Helvetica', 'Arial', sans-serif;
     }
@@ -54,7 +58,6 @@ st.markdown("""
         justify-content: center;
         align-items: center;
         
-        /* 電腦版預設高度 */
         height: 220px !important;
     }
 
@@ -70,7 +73,7 @@ st.markdown("""
             padding: 10px !important;
         }
         .metric-value { font-size: 2.2rem !important; }
-        .metric-label { font-size: 1.6rem !important; }
+        .metric-label { font-size: 1.5rem !important; }
     }
 
     /* 5. 策略橫幅 */
@@ -110,56 +113,21 @@ st.markdown("""
     button[data-baseweb="tab"] div p { color: #333333 !important; font-size: 20px !important; font-weight: 800 !important; }
     button[data-baseweb="tab"][aria-selected="true"] { background-color: #e3f2fd !important; border-bottom: 4px solid #3498db !important; }
     
-    /* --- 9. 下拉選單 (V77 終極修正：強制框內所有元素變白) --- */
+    /* 9. 下拉選單 */
+    .stSelectbox label { font-size: 20px !important; color: #333333 !important; font-weight: bold !important; }
+    .stSelectbox div[data-baseweb="select"] > div { background-color: #2c3e50 !important; border-color: #2c3e50 !important; color: white !important; }
+    .stSelectbox div[data-baseweb="select"] > div * { color: #FFFFFF !important; }
+    .stSelectbox div[data-baseweb="select"] svg { fill: #FFFFFF !important; color: #FFFFFF !important; }
+    ul[data-baseweb="menu"], div[data-baseweb="popover"] div { background-color: #2c3e50 !important; }
+    li[role="option"] { background-color: #2c3e50 !important; color: #FFFFFF !important; }
+    li[role="option"]:hover, li[role="option"][aria-selected="true"] { background-color: #34495e !important; color: #f1c40f !important; }
+    li[role="option"] div { color: #FFFFFF !important; }
+    li[role="option"]:hover div { color: #f1c40f !important; }
     
-    /* 1. 選單上方的標題文字 (例如 "選擇日期")：維持深色 */
-    .stSelectbox label {
-        font-size: 20px !important;
-        color: #333333 !important;
+    /* 10. 全球指數卡片優化 */
+    [data-testid="stMetricValue"] {
+        font-size: 1.8rem !important;
         font-weight: bold !important;
-    }
-
-    /* 2. 選單框框本體 (背景深藍色) */
-    .stSelectbox div[data-baseweb="select"] > div {
-        background-color: #2c3e50 !important;
-        border-color: #2c3e50 !important;
-        color: white !important; /* 第一層設定白色 */
-    }
-
-    /* 3. 【關鍵修正】強制框框內「所有」層級的文字變成白色 */
-    /* 這會覆蓋掉 Streamlit 預設的灰色 */
-    .stSelectbox div[data-baseweb="select"] > div * {
-        color: #FFFFFF !important;
-    }
-
-    /* 4. 右側箭頭 SVG 圖示強制變白 */
-    .stSelectbox div[data-baseweb="select"] svg {
-        fill: #FFFFFF !important;
-        color: #FFFFFF !important;
-    }
-
-    /* 5. 展開後的下拉列表清單 */
-    ul[data-baseweb="menu"] {
-        background-color: #2c3e50 !important;
-    }
-    
-    /* 6. 列表中的選項文字 */
-    li[role="option"] {
-        color: #FFFFFF !important;
-    }
-
-    /* 7. 滑鼠滑過選項的效果 */
-    li[role="option"]:hover, li[role="option"][aria-selected="true"] {
-        background-color: #34495e !important;
-        color: #f1c40f !important; /* 選中時變黃色 */
-    }
-    
-    /* 修正展開列表內的文字顏色 (雙重保險) */
-    li[role="option"] div {
-        color: #FFFFFF !important;
-    }
-    li[role="option"]:hover div {
-        color: #f1c40f !important;
     }
 
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
@@ -210,17 +178,358 @@ generation_config = {
 }
 
 if GOOGLE_API_KEY:
-    # 預設 gemini-1.5-flash，若有問題請用後台工具檢查
     model_name_to_use = "gemini-1.5-flash"
     model = genai.GenerativeModel(
         model_name=model_name_to_use,
         generation_config=generation_config,
     )
 
-DB_FILE = 'stock_data_v74.csv' # 維持您的檔名
+DB_FILE = 'stock_data_v74.csv' 
 BACKUP_FILE = 'stock_data_backup.csv'
 
 # --- 3. 核心函數 ---
+
+# 【V101 核心】股名 -> 族群 直接對照表
+NAME_TO_SECTOR = {
+    # === 半導體權值 ===
+    "台積電": "晶圓代工", "聯電": "晶圓代工", "力積電": "晶圓代工", "世界": "晶圓代工",
+    "聯發科": "IC設計", "鴻海": "組裝代工", "日月光投控": "封測",
+    
+    # === 記憶體 & 模組 ===
+    "群聯": "記憶體控制", "威剛": "記憶體模組", "十銓": "記憶體模組", "宇瞻": "記憶體模組",
+    "宜鼎": "工控記憶體", "創見": "記憶體模組", "華邦電": "記憶體", "南亞科": "記憶體",
+    "旺宏": "記憶體", "愛普*": "IP/記憶體", "晶豪科": "記憶體IC",
+    
+    # === 散熱族群 ===
+    "奇鋐": "散熱", "雙鴻": "散熱", "健策": "散熱", "高力": "散熱",
+    "建準": "散熱", "力致": "散熱", "泰碩": "散熱", "元山": "散熱", 
+    "尼得科超眾": "散熱", "協禧": "散熱", "廣運": "散熱/自動化", "富世達": "軸承/散熱",
+    
+    # === AI 伺服器 & 組裝 ===
+    "廣達": "AI伺服器", "緯創": "AI伺服器", "緯穎": "AI伺服器", "英業達": "AI伺服器",
+    "技嘉": "AI伺服器", "微星": "板卡/伺服器", "華碩": "AI伺服器", "仁寶": "組裝代工",
+    "和碩": "組裝代工", "宏碁": "AI PC", "神達": "伺服器",
+    
+    # === 機殼 & 導軌 ===
+    "勤誠": "機殼", "川湖": "導軌", "營邦": "機殼", "晟銘電": "機殼",
+    "迎廣": "機殼", "振發": "機殼", "富驊": "機殼",
+    
+    # === CPO / 光通訊 ===
+    "聯鈞": "CPO/光通訊", "聯亞": "光通訊", "華星光": "光通訊", "上詮": "光通訊",
+    "波若威": "光通訊", "光聖": "光通訊", "前鼎": "光通訊", "眾達-KY": "光通訊",
+    "光環": "光通訊", "創威": "光通訊", "訊芯-KY": "CPO封測",
+    
+    # === IP / ASIC ===
+    "世芯-KY": "IP矽智財", "創意": "IP矽智財", "智原": "IP矽智財", "M31": "IP矽智財",
+    "力旺": "IP矽智財", "晶心科": "IP矽智財", "巨有科技": "IP矽智財", "金麗科": "IP矽智財",
+    
+    # === IC 設計 (中小型/飆股) ===
+    "神盾": "神盾集團", "安國": "神盾集團", "安格": "神盾集團", "迅杰": "神盾集團", "芯鼎": "神盾集團",
+    "祥碩": "高速傳輸", "譜瑞-KY": "高速傳輸", "信驊": "BMC", "新唐": "MCU",
+    "天鈺": "驅動IC", "聯詠": "驅動IC", "瑞昱": "網通IC", "矽力-KY": "電源IC",
+    "茂達": "電源IC", "致新": "電源IC", "通嘉": "電源IC", "偉詮電": "電源IC",
+    "原相": "感測IC", "義隆": "觸控IC", "敦泰": "驅動IC", "凌陽": "IC設計",
+    "聯陽": "IC設計", "揚智": "IC設計", "九暘": "達發集團", "達發": "網通IC",
+    
+    # === 重電 & 綠能 ===
+    "華城": "重電", "士電": "重電", "中興電": "重電", "亞力": "重電", "東元": "重電",
+    "大同": "重電", "森崴能源": "綠能", "雲豹能源": "綠能", "世紀鋼": "風電",
+    "上緯投控": "風電", "華新": "電線電纜", "大亞": "電線電纜", "合機": "電線電纜",
+    "宏泰": "電線電纜",
+    
+    # === 連接器 & 線束 ===
+    "良維": "連接器", "貿聯-KY": "連接器", "信邦": "連接器", "維熹": "連接器",
+    "宏致": "連接器", "優群": "連接器", "嘉澤": "連接器", "凡甲": "連接器",
+    
+    # === PCB / CCL / 載板 ===
+    "台光電": "CCL銅箔", "台燿": "CCL銅箔", "聯茂": "CCL銅箔",
+    "金像電": "PCB", "健鼎": "PCB", "定穎投控": "PCB", "博智": "PCB", "華通": "PCB",
+    "楠梓電": "PCB", "燿華": "PCB", "敬鵬": "車用PCB",
+    "欣興": "ABF載板", "南電": "ABF載板", "景碩": "ABF載板",
+    
+    # === 被動元件 / 材料 ===
+    "國巨": "被動元件", "華新科": "被動元件", "勤凱": "被動元件/材料", "立隆電": "被動元件",
+    "信昌電": "被動元件", "禾伸堂": "被動元件", "凱美": "被動元件",
+    
+    # === 電池 & 車用 ===
+    "AES-KY": "電池模組", "順達": "電池模組", "新普": "電池模組", "加百裕": "電池模組",
+    "台達電": "電源/EV", "康舒": "電源", "飛宏": "充電樁", "立德": "電源",
+    
+    # === 設備 & 檢測 (CoWoS) ===
+    "弘塑": "CoWoS設備", "辛耘": "CoWoS設備", "萬潤": "CoWoS設備", "均華": "CoWoS設備",
+    "家登": "光罩盒", "致茂": "檢測設備", "閎康": "檢測分析", "宜特": "檢測分析",
+    "京鼎": "設備", "帆宣": "設備", "亞翔": "廠務", "漢唐": "廠務",
+    "雍智科技": "測試介面", "旺矽": "探針卡", "精測": "測試介面", "穎崴": "測試介面",
+    
+    # === 系統整合 & IPC ===
+    "三商電": "系統整合", "精誠": "系統整合", "零壹": "資安", "邁達特": "系統整合",
+    "凌華": "IPC/機器人", "樺漢": "IPC", "研華": "IPC", "廣積": "IPC", "友通": "IPC",
+    "立端": "網安IPC",
+    
+    # === 機器人概念 ===
+    "所羅門": "機器人", "羅昇": "機器人", "盟立": "機器人", "昆盈": "機器人",
+    "廣明": "機器人", "聰泰": "機器人", "圓剛": "機器人",
+    
+    # === 網通 ===
+    "智邦": "網通", "中磊": "網通", "啟碁": "網通", "明泰": "網通", "正文": "網通",
+    "合勤控": "網通", "神準": "網通", "智易": "網通",
+    
+    # === 生技 ===
+    "保瑞": "生技CDMO", "美時": "生技", "藥華藥": "生技", "合一": "生技",
+    "北極星藥業-KY": "生技", "智擎": "生技", "台康生技": "生技",
+    
+    # === 航運 ===
+    "長榮": "貨櫃航運", "陽明": "貨櫃航運", "萬海": "貨櫃航運",
+    "長榮航": "航空", "華航": "航空", "星宇航空": "航空",
+    "裕民": "散裝", "慧洋-KY": "散裝",
+    
+    # === 金融 ===
+    "富邦金": "金融", "國泰金": "金融", "中信金": "金融", "兆豐金": "金融",
+    "開發金": "金融", "元大金": "金融", "玉山金": "金融",
+    
+    # === 其他常見 ===
+    "元太": "電子紙", "亞光": "光學", "先進光": "光學", "大立光": "光學",
+    "中鋼": "鋼鐵", "台泥": "水泥", "統一": "食品",
+    "美利達": "自行車", "巨大": "自行車", "豐泰": "製鞋", "寶成": "製鞋",
+    "京元電子": "封測", "京元電": "封測"
+}
+
+# 【V101 核心】代碼與族群對照 (用於排行榜)
+TW_STOCK_INFO = {
+    # 權值/熱門 (上市)
+    "2330": ("台積電", "晶圓代工"), "2317": ("鴻海", "AI伺服器"), "2454": ("聯發科", "IC設計"), 
+    "2382": ("廣達", "AI伺服器"), "3231": ("緯創", "AI伺服器"), "2603": ("長榮", "航運"),
+    "3008": ("大立光", "光學鏡頭"), "3037": ("欣興", "ABF載板"), "3034": ("聯詠", "IC設計"),
+    "2379": ("瑞昱", "IC設計"), "2303": ("聯電", "晶圓代工"), "2881": ("富邦金", "金融"),
+    "2308": ("台達電", "電源/EV"), "1519": ("華城", "重電"), "1513": ("中興電", "重電"),
+    "2449": ("京元電子", "封測"), "6290": ("良維", "連接器"), "6781": ("AES-KY", "電池模組"),
+    "2427": ("三商電", "系統整合"), "2357": ("華碩", "AI伺服器"), "2356": ("英業達", "AI伺服器"),
+    "6669": ("緯穎", "AI伺服器"), "3035": ("智原", "IP矽智財"), "3443": ("創意", "IP矽智財"),
+    "3661": ("世芯-KY", "IP矽智財"), "3017": ("奇鋐", "散熱"), "3324": ("雙鴻", "散熱"),
+    "2345": ("智邦", "網通"), "3711": ("日月光投控", "封測"), "2368": ("金像電", "PCB"),
+    "2383": ("台光電", "CCL銅箔"), "6213": ("聯茂", "CCL銅箔"), "6805": ("富世達", "軸承/散熱"),
+    
+    # 權值/熱門 (上櫃)
+    "8299": ("群聯", "記憶體控制"), "8069": ("元太", "電子紙"), "6488": ("環球晶", "矽晶圓"),
+    "3293": ("鈊象", "遊戲"), "3529": ("力旺", "IP矽智財"), "3131": ("弘塑", "CoWoS設備"),
+    "5274": ("信驊", "IC設計"), "5347": ("世界", "晶圓代工"), "4966": ("譜瑞-KY", "IC設計"),
+    "6274": ("台燿", "CCL銅箔"), "3374": ("精材", "封測"), "6147": ("頎邦", "封測"),
+    "5483": ("中美晶", "矽晶圓"), "3105": ("穩懋", "砷化鎵"), "6223": ("旺矽", "探針卡"),
+    "3081": ("聯亞", "光通訊"), "3450": ("聯鈞", "CPO/光通訊"), "4979": ("華星光", "光通訊"),
+    "5289": ("宜鼎", "工控記憶體"), "4760": ("勤凱", "被動元件/材料"), "6683": ("雍智科技", "測試介面"),
+    "8996": ("高力", "散熱"), "6187": ("萬潤", "CoWoS設備"), "3583": ("辛耘", "CoWoS設備"),
+    "6138": ("茂達", "IC設計"), "3680": ("家登", "半導體設備"), "5425": ("台半", "二極體"),
+    "3260": ("威剛", "記憶體"), "8046": ("南電", "ABF載板")
+}
+
+# 輔助函式：取得名稱
+def get_stock_name(code):
+    clean_code = code.replace("(CB)", "").strip()
+    return TW_STOCK_INFO.get(clean_code, (clean_code, "其他"))[0]
+
+# 輔助函式：取得族群 (支援從代號或名稱反查)
+def get_stock_sector(identifier):
+    clean_id = identifier.replace("(CB)", "").strip()
+    if clean_id in TW_STOCK_INFO: return TW_STOCK_INFO[clean_id][1]
+    if clean_id in NAME_TO_SECTOR: return NAME_TO_SECTOR[clean_id]
+    return "其他"
+
+# --- 【V103 更新】全球市場即時報價 (修復版) ---
+@st.cache_data(ttl=60)
+def get_global_market_data():
+    try:
+        # 定義要抓取的指數 (代號: 顯示名稱)
+        indices = {
+            "^TWII": "🇹🇼 加權指數",
+            "^TWOII": "🇹🇼 櫃買指數",
+            "^N225": "🇯🇵 日經225",
+            "^DJI": "🇺🇸 道瓊工業",
+            "^IXIC": "🇺🇸 那斯達克",
+            "^SOX": "🇺🇸 費城半導體"
+        }
+        
+        market_data = []
+        
+        # 逐一抓取 (避免批次失敗影響全部)
+        for ticker, name in indices.items():
+            try:
+                stock = yf.Ticker(ticker)
+                
+                # 1. 嘗試使用 fast_info (最即時，但指數有時會缺)
+                try:
+                    price = stock.fast_info['last_price']
+                    prev_close = stock.fast_info['previous_close']
+                except:
+                    price = None
+                    prev_close = None
+                
+                # 2. 如果 fast_info 失敗 (常見於 ^TWOII 或美股盤前)
+                # 改抓歷史資料 (最後一筆收盤)
+                if price is None or pd.isna(price):
+                    hist = stock.history(period="5d") # 抓多天一點保險
+                    if not hist.empty:
+                        price = hist['Close'].iloc[-1]
+                        # 如果是今天還沒開盤，這會是昨天的收盤
+                        # 我們嘗試抓前一天的來算漲跌
+                        if len(hist) >= 2:
+                            prev_close = hist['Close'].iloc[-2]
+                        else:
+                            prev_close = price # 無法計算漲跌
+                
+                # 3. 計算漲跌
+                if price and prev_close:
+                    change = price - prev_close
+                    pct_change = (change / prev_close) * 100
+                    
+                    market_data.append({
+                        "name": name,
+                        "price": f"{price:,.0f}",
+                        "change": change,
+                        "pct_change": pct_change
+                    })
+            except:
+                continue # 略過失敗的指數
+                
+        return market_data
+    except: return []
+
+# --- 顯示全球市場區塊 ---
+def render_global_markets():
+    markets = get_global_market_data()
+    if markets:
+        st.markdown("### 🌏 全球重要指數 (Real-time)")
+        # 動態計算欄位數 (避免空欄位)
+        cols = st.columns(len(markets))
+        for i, m in enumerate(markets):
+            cols[i].metric(
+                label=m["name"],
+                value=m["price"],
+                delta=f"{m['change']:+.0f} ({m['pct_change']:+.2f}%)",
+                delta_color="inverse" 
+            )
+        st.divider()
+
+# --- 排行榜抓取 (V101: 暴力修正 "8299O" 問題) ---
+@st.cache_data(ttl=60) 
+def get_rank_v93_accurate(limit=20):
+    try:
+        tickers = [f"{code}.TW" for code in TW_STOCK_INFO.keys()] + \
+                  [f"{code}.TWO" for code in TW_STOCK_INFO.keys()]
+        data = yf.download(tickers, period="1d", group_by='ticker', progress=False, threads=True)
+        result_list = []
+        for ticker in tickers:
+            try:
+                # 【V101 關鍵修正】暴力清洗代碼，只保留數字
+                code = re.sub(r"\D", "", ticker) 
+                if ticker not in data.columns.levels[0]: continue
+                df_stock = data[ticker]
+                if df_stock.empty: continue
+                latest = df_stock.iloc[-1]
+                price = latest['Close']
+                volume = latest['Volume'] 
+                if pd.isna(price) or pd.isna(volume) or price <= 0: continue
+                turnover_yi = (price * volume) / 100000000
+                if turnover_yi < 1: continue 
+                open_price = latest['Open']
+                if pd.notna(open_price) and open_price > 0: change_pct = ((price - open_price) / open_price) * 100
+                else: change_pct = 0.0
+                info = TW_STOCK_INFO.get(code, (code, "其他"))
+                name = info[0]; sector = info[1]
+                market = "上櫃" if ".TWO" in ticker else "上市"
+                result_list.append({"代號": code, "名稱": name, "股價": float(price), "漲跌幅%": float(change_pct), "成交值(億)": float(turnover_yi), "市場": market, "族群": sector})
+            except: continue
+        if not result_list: return "目前無法取得市場數據"
+        df_rank = pd.DataFrame(result_list)
+        df_rank = df_rank.sort_values(by="成交值(億)", ascending=False).reset_index(drop=True)
+        df_rank.index = df_rank.index + 1
+        df_rank.insert(0, '排名', df_rank.index)
+        df_rank['成交值(億)'] = df_rank['成交值(億)'].round(2)
+        df_rank['股價'] = df_rank['股價'].round(1)
+        df_rank['漲跌幅%'] = df_rank['漲跌幅%'].round(2)
+        return df_rank.head(limit)
+    except Exception as e: return f"System Error: {str(e)}"
+
+# --- 【V102 專業版】繪製 大盤指數 K 線圖 ---
+def plot_market_index(index_type='上市', period='6mo'):
+    ticker_map = {'上市': '^TWII', '上櫃': '^TWOII'}
+    ticker = ticker_map.get(index_type, '^TWII')
+    try:
+        stock = yf.Ticker(ticker)
+        df = stock.history(period=period)
+        if df.empty: return None, f"無法取得 {index_type} 指數資料"
+
+        # 計算均線 (新增 MA10)
+        df['MA5'] = df['Close'].rolling(window=5).mean()
+        df['MA10'] = df['Close'].rolling(window=10).mean() # 新增
+        df['MA20'] = df['Close'].rolling(window=20).mean()
+        df['MA60'] = df['Close'].rolling(window=60).mean()
+
+        # 建立雙軸圖表
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, 
+                            subplot_titles=(f'{index_type}指數', '成交量'), 
+                            row_width=[0.2, 0.8]) # 調整高度比例
+
+        # K線圖 (Row 1)
+        fig.add_trace(go.Candlestick(
+            x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
+            name='K線', increasing_line_color='#ef5350', decreasing_line_color='#26a69a'
+        ), row=1, col=1)
+
+        # 均線 (Row 1) - 專業配色與線條
+        fig.add_trace(go.Scatter(x=df.index, y=df['MA5'], line=dict(color='#9C27B0', width=1.5), name='MA5 (週)'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['MA10'], line=dict(color='#FFC107', width=1.5), name='MA10 (雙週)'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['MA20'], line=dict(color='#2196F3', width=1.5), name='MA20 (月)'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['MA60'], line=dict(color='#4CAF50', width=1.5), name='MA60 (季)'), row=1, col=1)
+
+        # 成交量 (Row 2)
+        colors = ['#ef5350' if row['Open'] - row['Close'] <= 0 else '#26a69a' for index, row in df.iterrows()]
+        fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=colors, name='成交量'), row=2, col=1)
+
+        # 專業版面設定
+        fig.update_layout(
+            height=600, # 增加高度
+            margin=dict(l=20, r=20, t=40, b=20),
+            paper_bgcolor='white', plot_bgcolor='#FAFAFA', # 極淡灰背景
+            font=dict(family="Arial, sans-serif", size=12, color='#333333'),
+            legend=dict(
+                orientation="h", yanchor="top", y=0.99, xanchor="left", x=0.01, # 圖例移至內部左上
+                bgcolor="rgba(255, 255, 255, 0.8)", bordercolor="#E0E0E0", borderwidth=1
+            ),
+            xaxis_rangeslider_visible=False,
+            hovermode='x unified' # 【關鍵】統一顯示十字準線資訊
+        )
+        
+        # 細緻格線設定
+        grid_style = dict(showgrid=True, gridwidth=1, gridcolor='#F0F0F0')
+        fig.update_xaxes(**grid_style, row=1, col=1)
+        fig.update_yaxes(**grid_style, title='指數', row=1, col=1)
+        fig.update_xaxes(**grid_style, row=2, col=1)
+        fig.update_yaxes(**grid_style, title='量', row=2, col=1)
+
+        return fig, ""
+    except Exception as e: return None, f"繪圖錯誤: {str(e)}"
+
+# --- UI 輔助函數 ---
+def render_metric_card(col, label, value, color_border="gray", sub_value=""):
+    sub_html = f'<div class="metric-sub">{sub_value}</div>' if sub_value else ""
+    col.markdown(f"""
+    <div class="metric-container" style="border-top: 5px solid {color_border};">
+        <div class="metric-label">{label}</div>
+        <div class="metric-value">{value}</div>
+        {sub_html}
+    </div>
+    """, unsafe_allow_html=True)
+
+def render_stock_tags(stock_str):
+    if pd.isna(stock_str) or not stock_str: return "<span style='color:#bdc3c7; font-size:1.2rem; font-weight:600;'>（無標的）</span>"
+    html = ""
+    stocks = str(stock_str).split('、')
+    for s in stocks:
+        if not s: continue
+        if "(CB)" in s: name = s.replace("(CB)", ""); html += f"<div class='stock-tag stock-tag-cb'>{name}<span class='cb-badge'>CB</span></div>"
+        else: html += f"<div class='stock-tag'>{s}</div>"
+    return html
+
 def load_db():
     if os.path.exists(DB_FILE):
         try:
@@ -267,20 +576,14 @@ def save_full_history(df_to_save):
 def clear_db():
     if os.path.exists(DB_FILE): os.remove(DB_FILE)
 
-# 【新增】計算風向持續天數
 def calculate_wind_streak(df, current_date_str):
     if df.empty: return 0
-    
     past_df = df[df['date'] <= current_date_str].copy()
     if past_df.empty: return 0
-    
     past_df = past_df.sort_values('date', ascending=False).reset_index(drop=True)
-    
     def clean_wind(w): return str(w).replace("(CB)", "").strip()
-    
     current_wind = clean_wind(past_df.iloc[0]['wind'])
     streak = 1
-    
     for i in range(1, len(past_df)):
         prev_wind = clean_wind(past_df.iloc[i]['wind'])
         if prev_wind == current_wind:
@@ -331,7 +634,7 @@ def ai_analyze_v86(image):
         return response.text
     except Exception as e: return json.dumps({"error": str(e)})
 
-# --- 4. 統計與繪圖函數 ---
+# --- 【V100 修正】計算月度風雲榜 (使用新版 NAME_TO_SECTOR 反查) ---
 def calculate_monthly_stats(df):
     if df.empty: return pd.DataFrame()
     df['dt'] = pd.to_datetime(df['date'], errors='coerce')
@@ -353,31 +656,21 @@ def calculate_monthly_stats(df):
         exploded = exploded[exploded['stock'] != '']
         counts = exploded.groupby(['Month', 'stock']).size().reset_index(name='Count')
         counts['Strategy'] = strategy_name
+        
+        # 【V100 更新】使用 Name-Based 字典反查
+        def find_sector(stock_name):
+            clean_name = stock_name.replace("(CB)", "").strip()
+            # 直接查名詞表
+            return NAME_TO_SECTOR.get(clean_name, "其他")
+            
+        counts['Industry'] = counts['stock'].apply(find_sector)
+        
         all_stats.append(counts)
+        
     if not all_stats: return pd.DataFrame()
     final_df = pd.concat(all_stats)
     final_df = final_df.sort_values(['Month', 'Strategy', 'Count'], ascending=[False, True, False])
     return final_df
-
-def render_metric_card(col, label, value, color_border="gray", sub_value=""):
-    sub_html = f'<div class="metric-sub">{sub_value}</div>' if sub_value else ""
-    col.markdown(f"""
-    <div class="metric-container" style="border-top: 5px solid {color_border};">
-        <div class="metric-label">{label}</div>
-        <div class="metric-value">{value}</div>
-        {sub_html}
-    </div>
-    """, unsafe_allow_html=True)
-
-def render_stock_tags(stock_str):
-    if pd.isna(stock_str) or not stock_str: return "<span style='color:#bdc3c7; font-size:1.2rem; font-weight:600;'>（無標的）</span>"
-    html = ""
-    stocks = str(stock_str).split('、')
-    for s in stocks:
-        if not s: continue
-        if "(CB)" in s: name = s.replace("(CB)", ""); html += f"<div class='stock-tag stock-tag-cb'>{name}<span class='cb-badge'>CB</span></div>"
-        else: html += f"<div class='stock-tag'>{s}</div>"
-    return html
 
 # --- 5. 頁面視圖：戰情儀表板 (前台) ---
 def show_dashboard():
@@ -395,18 +688,30 @@ def show_dashboard():
 
     st.markdown(f"""<div class="title-box"><h1 style='margin:0; font-size: 2.8rem;'>📅 {selected_date} 市場戰情室</h1><p style='margin-top:10px; opacity:0.9;'>資料更新於: {day_data['last_updated']}</p></div>""", unsafe_allow_html=True)
 
+    # 全球市場報價牆 (V103修復版)
+    render_global_markets()
+
+    # K線圖區塊
+    with st.expander("📊 大盤指數走勢圖 (點擊展開)", expanded=True):
+        col_m1, col_m2 = st.columns([1, 4])
+        with col_m1:
+            market_type = st.radio("選擇市場", ["上市", "上櫃"], horizontal=True)
+            market_period = st.selectbox("週期", ["1mo", "3mo", "6mo", "1y"], index=2, key="market_period")
+        with col_m2:
+            fig, err = plot_market_index(market_type, market_period)
+            if fig: st.plotly_chart(fig, use_container_width=True)
+            else: st.warning(err)
+            
+    st.divider()
+
     c1, c2, c3, c4 = st.columns(4)
     wind_status = day_data['wind']; wind_color = "#2ecc71"
-    
     wind_streak = calculate_wind_streak(df, selected_date)
     streak_text = f"已持續 {wind_streak} 天"
-
     if "強" in str(wind_status): wind_color = "#e74c3c"
     elif "亂" in str(wind_status): wind_color = "#9b59b6"
     elif "陣" in str(wind_status): wind_color = "#f1c40f"
-    
     render_metric_card(c1, "今日風向", wind_status, wind_color, sub_value=streak_text)
-    
     render_metric_card(c2, "🪁 打工型風箏", day_data['part_time_count'], "#f39c12")
     render_metric_card(c3, "💪 上班族強勢週", day_data['worker_strong_count'], "#3498db")
     render_metric_card(c4, "📈 上班族週趨勢", day_data['worker_trend_count'], "#9b59b6")
@@ -430,7 +735,6 @@ def show_dashboard():
     chart_df['Month'] = chart_df['date_dt'].dt.strftime('%Y-%m')
 
     tab1, tab2, tab3 = st.tabs(["📈 每日風箏數量", "🌬️ 每日風度分佈", "📅 每月風度統計"])
-    
     axis_config = alt.Axis(labelFontSize=16, titleFontSize=20, labelColor='#333333', titleColor='#333333', labelFontWeight='bold', grid=True, gridColor='#E0E0E0')
     legend_config = alt.Legend(orient='top', labelFontSize=16, titleFontSize=20, labelColor='#333333', titleColor='#333333')
 
@@ -438,59 +742,64 @@ def show_dashboard():
         melted_df = chart_df.melt(id_vars=['date'], value_vars=['part_time_count', 'worker_strong_count', 'worker_trend_count'], var_name='category', value_name='count')
         name_map = {'part_time_count': '打工型風箏', 'worker_strong_count': '上班族強勢週', 'worker_trend_count': '上班族週趨勢'}
         melted_df['category'] = melted_df['category'].map(name_map)
-        bar_chart = alt.Chart(melted_df).mark_bar(opacity=0.9).encode(
-            x=alt.X('date:O', title='日期', axis=axis_config),
-            y=alt.Y('count:Q', title='數量', axis=axis_config),
-            color=alt.Color('category:N', title='指標', legend=legend_config),
-            xOffset='category:N', tooltip=['date', 'category', 'count']
-        ).properties(height=450).configure(background='white').interactive()
+        bar_chart = alt.Chart(melted_df).mark_bar(opacity=0.9).encode(x=alt.X('date:O', title='日期', axis=axis_config), y=alt.Y('count:Q', title='數量', axis=axis_config), color=alt.Color('category:N', title='指標', legend=legend_config), xOffset='category:N', tooltip=['date', 'category', 'count']).properties(height=450).configure(background='white').interactive()
         st.altair_chart(bar_chart, use_container_width=True)
-
     with tab2:
         wind_order = ['強風', '亂流', '陣風', '無風'] 
-        wind_chart = alt.Chart(chart_df).mark_circle(size=600, opacity=1).encode(
-            x=alt.X('date:O', title='日期', axis=axis_config),
-            y=alt.Y('wind:N', title='風度', sort=wind_order, axis=axis_config),
-            color=alt.Color('wind:N', title='狀態', legend=legend_config, scale=alt.Scale(domain=['無風', '陣風', '亂流', '強風'], range=['#2ecc71', '#f1c40f', '#9b59b6', '#e74c3c'])),
-            tooltip=['date', 'wind']
-        ).properties(height=400).configure(background='white').interactive()
+        wind_chart = alt.Chart(chart_df).mark_circle(size=600, opacity=1).encode(x=alt.X('date:O', title='日期', axis=axis_config), y=alt.Y('wind:N', title='風度', sort=wind_order, axis=axis_config), color=alt.Color('wind:N', title='狀態', legend=legend_config, scale=alt.Scale(domain=['無風', '陣風', '亂流', '強風'], range=['#2ecc71', '#f1c40f', '#9b59b6', '#e74c3c'])), tooltip=['date', 'wind']).properties(height=400).configure(background='white').interactive()
         st.altair_chart(wind_chart, use_container_width=True)
-
     with tab3:
         monthly_wind = chart_df.groupby(['Month', 'wind']).size().reset_index(name='days')
         group_order = ['無風', '陣風', '亂流', '強風']
-        grouped_chart = alt.Chart(monthly_wind).mark_bar().encode(
-            x=alt.X('Month:O', title='月份', axis=axis_config),
-            y=alt.Y('days:Q', title='天數', axis=axis_config),
-            color=alt.Color('wind:N', title='風度', sort=group_order, scale=alt.Scale(domain=['無風', '陣風', '亂流', '強風'], range=['#2ecc71', '#f1c40f', '#9b59b6', '#e74c3c']), legend=legend_config),
-            xOffset=alt.XOffset('wind:N', sort=group_order),
-            tooltip=['Month', 'wind', 'days']
-        ).properties(height=450).configure(background='white').interactive()
+        grouped_chart = alt.Chart(monthly_wind).mark_bar().encode(x=alt.X('Month:O', title='月份', axis=axis_config), y=alt.Y('days:Q', title='天數', axis=axis_config), color=alt.Color('wind:N', title='風度', sort=group_order, scale=alt.Scale(domain=['無風', '陣風', '亂流', '強風'], range=['#2ecc71', '#f1c40f', '#9b59b6', '#e74c3c']), legend=legend_config), xOffset=alt.XOffset('wind:N', sort=group_order), tooltip=['Month', 'wind', 'days']).properties(height=450).configure(background='white').interactive()
         st.altair_chart(grouped_chart, use_container_width=True)
 
+    # --- 【V100 更新】策略選股月度風雲榜 ---
     st.markdown("---")
     st.header("🏆 策略選股月度風雲榜")
-    st.caption("統計各策略下，股票出現的次數。")
+    st.caption("統計各策略下，股票出現的次數與所屬族群。")
+    
     stats_df = calculate_monthly_stats(df)
+    
     if not stats_df.empty:
         month_list = stats_df['Month'].unique()
         selected_month = st.selectbox("選擇統計月份", options=month_list)
         filtered_stats = stats_df[stats_df['Month'] == selected_month]
         strategies_list = filtered_stats['Strategy'].unique()
+        
         cols1 = st.columns(3); cols2 = st.columns(3)
         for i, strategy in enumerate(strategies_list):
             strat_data = filtered_stats[filtered_stats['Strategy'] == strategy].head(10)
+            
+            col_config = {
+                "stock": "股票名稱",
+                "Count": st.column_config.ProgressColumn("出現次數", format="%d次", min_value=0, max_value=int(strat_data['Count'].max()) if not strat_data.empty else 1),
+                "Industry": st.column_config.TextColumn("族群", help="所屬產業類別")
+            }
+            
             if i < 3:
                 with cols1[i]:
                     st.subheader(f"{strategy}")
-                    st.dataframe(strat_data[['stock', 'Count']], hide_index=True, use_container_width=True, 
-                                 column_config={"stock": "股票名稱", "Count": st.column_config.ProgressColumn("出現次數", format="%d次", min_value=0, max_value=int(strat_data['Count'].max()) if not strat_data.empty else 1)})
+                    st.dataframe(strat_data[['stock', 'Count', 'Industry']], hide_index=True, use_container_width=True, column_config=col_config)
             else:
                 with cols2[i-3]:
                     st.subheader(f"{strategy}")
-                    st.dataframe(strat_data[['stock', 'Count']], hide_index=True, use_container_width=True,
-                                 column_config={"stock": "股票名稱", "Count": st.column_config.ProgressColumn("出現次數", format="%d次", min_value=0, max_value=int(strat_data['Count'].max()) if not strat_data.empty else 1)})
-    else: st.info("累積足夠資料後，將在此顯示統計排行。")
+                    st.dataframe(strat_data[['stock', 'Count', 'Industry']], hide_index=True, use_container_width=True, column_config=col_config)
+    else:
+        st.info("累積足夠資料後，將在此顯示統計排行。")
+
+    # --- 權值股排行 (V93邏輯 + V101暴力清洗) ---
+    st.markdown("---")
+    st.header("🔥 今日市場重點監控 (權值股/熱門股 成交值排行)")
+    st.caption("資料來源：Yahoo Finance (監控前 200 大活躍股，即時運算) | 單位：億元")
+    
+    with st.spinner("正在計算最新成交資料..."):
+        rank_df = get_rank_v93_accurate(20)
+        if isinstance(rank_df, pd.DataFrame) and not rank_df.empty:
+            max_turnover = rank_df['成交值(億)'].max()
+            safe_max = int(max_turnover) if max_turnover > 0 else 1
+            st.dataframe(rank_df, hide_index=True, use_container_width=True, column_config={"排名": st.column_config.NumberColumn("#", width="small"), "代號": st.column_config.TextColumn("代號"), "名稱": st.column_config.TextColumn("名稱", width="medium"), "股價": st.column_config.NumberColumn("股價", format="$%.1f"), "漲跌幅%": st.column_config.NumberColumn("漲跌幅", format="%.2f%%", help="日漲跌幅估算"), "成交值(億)": st.column_config.ProgressColumn("成交值 (億)", format="$%.2f億", min_value=0, max_value=safe_max), "市場": st.column_config.TextColumn("市場", width="small"), "族群": st.column_config.TextColumn("族群")})
+        else: st.warning(f"⚠️ 無法抓取資料：{rank_df}")
 
 # --- 6. 頁面視圖：管理後台 (後台) ---
 def show_admin_panel():
@@ -508,7 +817,7 @@ def show_admin_panel():
                 st.info("請將上述列表中，支援 vision/flash 的模型名稱填入程式碼中的 `model_name`。")
             except Exception as e:
                 st.error(f"查詢失敗: {e}")
-
+    
     st.subheader("📥 新增/更新資料")
     uploaded_file = st.file_uploader("上傳截圖", type=["png", "jpg", "jpeg"])
     if 'preview_df' not in st.session_state: st.session_state.preview_df = None
@@ -635,9 +944,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
