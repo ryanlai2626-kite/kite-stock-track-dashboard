@@ -21,8 +21,8 @@ try:
 except ImportError:
     from typing import TypedDict
 
-# --- 1. 頁面與 CSS (V116: 語法修復 + 穩定版) ---
-st.set_page_config(layout="wide", page_title="StockTrack V116", page_icon="💎")
+# --- 1. 頁面與 CSS (V117: 族群別名系統 + 成交值日期修復) ---
+st.set_page_config(layout="wide", page_title="StockTrack V117", page_icon="🎯")
 
 st.markdown("""
 <style>
@@ -50,10 +50,31 @@ st.markdown("""
     .worker-banner { background: linear-gradient(90deg, #2980b9, #3498db); }
     .boss-banner { background: linear-gradient(90deg, #c0392b, #e74c3c); }
     .revenue-banner { background: linear-gradient(90deg, #d35400, #e67e22); }
-    .stock-tag { display: inline-block; background-color: #FFFFFF; color: #2c3e50 !important; border: 2px solid #bdc3c7; padding: 10px 18px; margin: 8px; border-radius: 10px; font-weight: 800; font-size: 1.6rem; box-shadow: 0 3px 6px rgba(0,0,0,0.1); vertical-align: middle; text-align: center; min-width: 140px; }
+    
+    /* V115: 標籤與成交值優化 */
+    .stock-tag { 
+        display: inline-block; background-color: #FFFFFF; color: #2c3e50 !important; 
+        border: 2px solid #bdc3c7; padding: 10px 18px; margin: 8px; 
+        border-radius: 10px; font-weight: 800; font-size: 1.6rem; 
+        box-shadow: 0 3px 6px rgba(0,0,0,0.1); 
+        vertical-align: middle;
+        text-align: center;
+        min-width: 140px;
+    }
     .stock-tag-cb { background-color: #fff8e1; border-color: #f1c40f; color: #d35400 !important; }
     .cb-badge { background-color: #e67e22; color: #FFFFFF !important; font-size: 0.6em; padding: 2px 6px; border-radius: 4px; margin-left: 5px; vertical-align: text-top; }
-    .turnover-val { display: block; font-size: 0.75em; font-weight: bold; color: #c0392b; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc; font-family: 'Arial', sans-serif; }
+    
+    .turnover-val {
+        display: block;
+        font-size: 0.75em;
+        font-weight: bold;
+        color: #c0392b; /* 鮮豔紅 */
+        margin-top: 4px;
+        padding-top: 4px;
+        border-top: 1px dashed #ccc;
+        font-family: 'Arial', sans-serif;
+    }
+
     .stDataFrame table { text-align: center !important; }
     .stDataFrame th { font-size: 18px !important; color: #000000 !important; background-color: #E6E9EF !important; text-align: center !important; font-weight: 900 !important; }
     .stDataFrame td { font-size: 18px !important; color: #333333 !important; background-color: #FFFFFF !important; text-align: center !important; }
@@ -106,8 +127,8 @@ BACKUP_FILE = 'stock_data_backup.csv'
 
 # --- 3. 核心函數 ---
 
-# 【V116 核心】單一真理資料庫 (MASTER_STOCK_DB)
-# 格式: "代碼": ("名稱", "族群")  <-- 改回 Tuple，避免語法錯誤
+# 【V115 核心】單一真理資料庫 (MASTER_STOCK_DB)
+# 包含您提到的所有股票 + 權值股
 MASTER_STOCK_DB = {
     # === 半導體 / 晶圓 ===
     "2330": ("台積電", "晶圓代工"), "2303": ("聯電", "晶圓代工"),
@@ -124,6 +145,7 @@ MASTER_STOCK_DB = {
     "6462": ("神盾", "神盾集團"), "8054": ("安國", "神盾集團"),
     "6643": ("M31", "IP矽智財"), "6695": ("芯鼎", "神盾集團"),
     "6689": ("伊雲谷", "雲端/IP"), "6533": ("晶心科", "IP矽智財"),
+    "6698": ("連宇", "IC設計"), "6535": ("順藥", "生技"),
 
     # === IP / ASIC ===
     "3661": ("世芯-KY", "IP矽智財"), "3443": ("創意", "IP矽智財"),
@@ -151,6 +173,7 @@ MASTER_STOCK_DB = {
     "6223": ("旺矽", "探針卡"), "6510": ("精測", "測試介面"),
     "3587": ("閎康", "檢測分析"), "3289": ("宜特", "檢測分析"),
     "6166": ("凌華", "IPC/機器人"), "8028": ("昇陽半導體", "再生晶圓"),
+    "6612": ("奈米醫材", "設備耗材"),
     
     # === PCB / 材料 / 載板 ===
     "1815": ("富喬", "PCB材料"), "8021": ("尖點", "PCB鑽針"),
@@ -169,6 +192,7 @@ MASTER_STOCK_DB = {
     "4977": ("眾達-KY", "光通訊"), "3234": ("光環", "光通訊"),
     "2345": ("智邦", "網通"), "5388": ("中磊", "網通"),
     "6285": ("啟碁", "網通"), "6451": ("訊芯-KY", "CPO封測"),
+    "4971": ("IET-KY", "三五族/砷化鎵"),
     
     # === 散熱 ===
     "3017": ("奇鋐", "散熱"), "3324": ("雙鴻", "散熱"),
@@ -208,14 +232,24 @@ MASTER_STOCK_DB = {
     "1795": ("美時", "生技"), "4763": ("材料-KY", "化工"),
     
     # === 傳產/金融/其他 ===
-    "2603": ("長榮", "航運"), "2609": ("陽明", "航運"),
-    "2615": ("萬海", "航運"), "2881": ("富邦金", "金融"),
-    "2882": ("國泰金", "金融"), "3036": ("文曄", "IC通路"),
-    "8112": ("至上", "IC通路"), "4768": ("晶呈科技", "半導體特氣"),
-    "3008": ("大立光", "光學鏡頭"), "3406": ("玉晶光", "光學鏡頭"),
-    "9914": ("美利達", "自行車"), "9921": ("巨大", "自行車"),
-    "1605": ("華新", "電線電纜"), "1504": ("東元", "重電")
+    "2603": {"name": "長榮", "sector": "航運"}, "2609": {"name": "陽明", "sector": "航運"},
+    "2615": {"name": "萬海", "sector": "航運"}, "2881": {"name": "富邦金", "sector": "金融"},
+    "2882": {"name": "國泰金", "sector": "金融"}, "3036": {"name": "文曄", "sector": "IC通路"},
+    "8112": {"name": "至上", "sector": "IC通路"}, "4768": {"name": "晶呈科技", "sector": "半導體特氣"},
+    "3008": {"name": "大立光", "sector": "光學鏡頭"}, "3406": {"name": "玉晶光", "sector": "光學鏡頭"},
+    "9914": {"name": "美利達", "sector": "自行車"}, "9921": {"name": "巨大", "sector": "自行車"},
+    "1605": {"name": "華新", "sector": "電線電纜"}, "1504": {"name": "東元", "sector": "重電"}
 }
+
+# --- 補丁：因為上方手動輸入可能有格式不一致，統一轉為 Tuple 格式 ---
+# 確保所有 value 都是 (name, sector) tuple
+NORMALIZED_DB = {}
+for k, v in MASTER_STOCK_DB.items():
+    if isinstance(v, dict):
+        NORMALIZED_DB[k] = (v["name"], v["sector"])
+    else:
+        NORMALIZED_DB[k] = v
+MASTER_STOCK_DB = NORMALIZED_DB
 
 # 自動生成 NAME_TO_SECTOR
 NAME_TO_SECTOR = {}
@@ -225,23 +259,38 @@ for code, (name, sector) in MASTER_STOCK_DB.items():
 # 自動生成 NAME_TO_CODE
 NAME_TO_CODE = {v[0]: k for k, v in MASTER_STOCK_DB.items()}
 
-# 【V116】智慧代碼識別器 (修復成交值查詢)
-def smart_get_code(stock_name):
-    clean_name = str(stock_name).replace("(CB)", "").replace("*", "").strip()
-    if clean_name.isdigit() and clean_name in MASTER_STOCK_DB: return clean_name
-    if clean_name in NAME_TO_CODE: return NAME_TO_CODE[clean_name]
-    for name, code in NAME_TO_CODE.items():
-        if clean_name in name or name in clean_name: return code
-    return None
+# 【V117】別名對照表 (解決 京元電 vs 京元電子, IET-KY vs IET)
+ALIAS_MAP = {
+    "京元電": "京元電子", "亞翔工程": "亞翔", "聖暉*": "聖暉", "聖暉工程": "聖暉",
+    "IET": "IET-KY", "JPP": "JPP-KY", "AES": "AES-KY", "世芯": "世芯-KY",
+    "譜瑞": "譜瑞-KY", "力積": "力積電", "台積": "台積電", "聯發": "聯發科",
+    "日月光": "日月光投控"
+}
 
+# 輔助函式
+def get_stock_name(code):
+    clean_code = str(code).replace("(CB)", "").strip()
+    return MASTER_STOCK_DB.get(clean_code, (clean_code, "其他"))[0]
+
+# 【V117】強化版族群反查
 def get_stock_sector(identifier):
-    code = smart_get_code(identifier)
-    if code and code in MASTER_STOCK_DB: return MASTER_STOCK_DB[code][1]
+    clean_id = str(identifier).replace("(CB)", "").strip()
     
-    clean_name = str(identifier).replace("(CB)", "").strip()
-    if clean_name in NAME_TO_SECTOR: return NAME_TO_SECTOR[clean_name]
-    clean_no_star = clean_name.replace("*", "")
-    if clean_no_star in NAME_TO_SECTOR: return NAME_TO_SECTOR[clean_no_star]
+    # 1. 處理別名
+    if clean_id in ALIAS_MAP:
+        clean_id = ALIAS_MAP[clean_id]
+        
+    # 2. 移除 * 號
+    clean_id = clean_id.replace("*", "")
+
+    # 3. 嘗試代碼查
+    if clean_id in MASTER_STOCK_DB: 
+        return MASTER_STOCK_DB[clean_id][1]
+    
+    # 4. 嘗試名稱查
+    if clean_id in NAME_TO_SECTOR: 
+        return NAME_TO_SECTOR[clean_id]
+
     return "其他"
 
 def clean_and_lookup_stock(raw_code_or_name, raw_name_from_source=None):
@@ -250,6 +299,8 @@ def clean_and_lookup_stock(raw_code_or_name, raw_name_from_source=None):
          return code, MASTER_STOCK_DB[code][0], MASTER_STOCK_DB[code][1]
     if raw_name_from_source:
         clean_name = raw_name_from_source.replace('*', '').strip()
+        if clean_name in ALIAS_MAP: clean_name = ALIAS_MAP[clean_name] # 別名轉換
+        
         sector = NAME_TO_SECTOR.get(clean_name, "其他")
         if sector == "其他":
              for key, val in NAME_TO_SECTOR.items():
@@ -262,7 +313,22 @@ def clean_and_lookup_stock(raw_code_or_name, raw_name_from_source=None):
         return code, clean_name, sector
     return code, raw_code_or_name, "其他"
 
-# --- 全球市場即時報價 (V104 修復版) ---
+# 【V117】更強大的代碼識別 (用於成交值抓取)
+def smart_get_code(stock_name):
+    # 1. 移除雜訊
+    clean_name = str(stock_name).replace("(CB)", "").replace("*", "").strip()
+    
+    # 2. 處理別名
+    if clean_name in ALIAS_MAP:
+        clean_name = ALIAS_MAP[clean_name]
+    
+    # 3. 查表
+    if clean_name.isdigit() and clean_name in MASTER_STOCK_DB: return clean_name
+    if clean_name in NAME_TO_CODE: return NAME_TO_CODE[clean_name]
+    
+    return None
+
+# --- 全球市場即時報價 ---
 @st.cache_data(ttl=60)
 def get_global_market_data():
     try:
@@ -272,15 +338,18 @@ def get_global_market_data():
         for ticker, name in indices.items():
             try:
                 stock = yf.Ticker(ticker)
-                hist = stock.history(period="5d") # 強制抓歷史
+                hist = stock.history(period="5d")
                 if not hist.empty:
                     price = hist['Close'].iloc[-1]
                     prev_close = hist['Close'].iloc[-2] if len(hist) >= 2 else price
                     change = price - prev_close
                     pct_change = (change / prev_close) * 100
+                    
                     color_class = "up-color" if change > 0 else ("down-color" if change < 0 else "flat-color")
                     card_class = "card-up" if change > 0 else ("card-down" if change < 0 else "card-flat")
-                    market_data.append({"name": name, "price": f"{price:,.0f}", "change": change, "pct_change": pct_change, "color_class": color_class, "card_class": card_class})
+                    
+                    market_data.append({"name": name, "price": f"{price:,.0f}", "change": change, 
+                                        "pct_change": pct_change, "color_class": color_class, "card_class": card_class})
             except: continue
         return market_data
     except: return []
@@ -301,7 +370,7 @@ def render_global_markets():
                 """, unsafe_allow_html=True)
         st.divider()
 
-# --- 排行榜抓取 (混合模式) ---
+# --- 爬蟲混合模式 ---
 @st.cache_data(ttl=60) 
 def get_rank_v107_hybrid(limit=20):
     try:
@@ -375,9 +444,13 @@ def get_rank_v107_hybrid(limit=20):
     except: pass
     return "無法取得資料"
 
-# --- 【V114】預先批次抓取成交值 ---
+# --- 【V117】預先批次抓取成交值 (後台計算核心) ---
 @st.cache_data(ttl=300)
 def prefetch_turnover_data(stock_list_str, target_date):
+    """
+    輸入: 股票名稱字串
+    輸出: {股票名稱: 成交值}
+    """
     if not stock_list_str: return {}
     unique_names = set()
     for s in stock_list_str:
@@ -385,41 +458,69 @@ def prefetch_turnover_data(stock_list_str, target_date):
         names = [n.strip() for n in str(s).split('、') if n.strip()]
         for name in names:
             unique_names.add(name.replace("(CB)", ""))
+    
     code_map = {}
     tickers = []
     for name in unique_names:
-        code = smart_get_code(name)
+        code = smart_get_code(name) # 使用 V117 強化的代碼查詢
         if code:
             code_map[code] = name
             tickers.append(f"{code}.TW")
             tickers.append(f"{code}.TWO")
+            
     if not tickers: return {}
+    
     try:
-        target_dt = datetime.strptime(target_date, "%Y-%m-%d")
-        start_dt = target_dt - timedelta(days=4)
+        # 【關鍵】強制轉換日期格式 (防止字串 vs Timestamp 不匹配)
+        # 並抓取前後 5 天的資料，確保能找到最近的交易日
+        target_dt = datetime.strptime(str(target_date), "%Y-%m-%d")
+        start_dt = target_dt - timedelta(days=5)
         end_dt = target_dt + timedelta(days=1)
+        
         start_str = start_dt.strftime("%Y-%m-%d")
         end_str = end_dt.strftime("%Y-%m-%d")
+        
         data = yf.download(tickers, start=start_str, end=end_str, group_by='ticker', progress=False, threads=True)
+        
         result_map = {}
         for code, name in code_map.items():
             found_val = 0
             for suffix in ['.TW', '.TWO']:
                 try:
-                    df = data[f"{code}{suffix}"]
-                    if not df.empty:
-                        row = df.iloc[-1]
-                        price = row['Close']
-                        vol = row['Volume']
-                        if not pd.isna(price) and not pd.isna(vol) and price > 0:
-                            val = (price * vol) / 100000000
-                            if val > 0:
-                                found_val = val
-                                break
+                    ticker = f"{code}{suffix}"
+                    # 檢查 ticker 是否存在於資料中
+                    if ticker in data.columns.levels[0]:
+                        df = data[ticker]
+                        if not df.empty:
+                            # 嘗試找到 target_date 當天的資料
+                            # 由於 yfinance index 是 timestamp，我們轉成字串比對
+                            df.index = df.index.strftime("%Y-%m-%d")
+                            
+                            if target_date in df.index:
+                                row = df.loc[target_date]
+                            else:
+                                # 如果當天沒資料(假日)，取最後一筆(最近交易日)
+                                row = df.iloc[-1]
+                            
+                            # 有些資料結構是 Series，有些是 DataFrame (單行)
+                            # 統一處理
+                            price = float(row['Close']) if not pd.isna(row['Close']) else 0
+                            vol = float(row['Volume']) if not pd.isna(row['Volume']) else 0
+                            
+                            if price > 0 and vol > 0:
+                                val = (price * vol) / 100000000
+                                if val > 0:
+                                    found_val = val
+                                    break
                 except: pass
-            if found_val > 0: result_map[name] = found_val
+            
+            if found_val > 0:
+                result_map[name] = found_val
+                
         return result_map
-    except: return {}
+    except Exception as e:
+        print(f"Turnover Error: {e}")
+        return {}
 
 # --- 【V114】UI 輔助函數 ---
 def render_metric_card(col, label, value, color_border="gray", sub_value=""):
@@ -463,14 +564,20 @@ def save_batch_data(records_list):
     if os.path.exists(DB_FILE):
         try: shutil.copy(DB_FILE, BACKUP_FILE)
         except: pass
-    if isinstance(records_list, list): new_data = pd.DataFrame(records_list)
-    else: new_data = records_list
+
+    if isinstance(records_list, list):
+        new_data = pd.DataFrame(records_list)
+    else:
+        new_data = records_list
+
     if not new_data.empty:
         new_data['date'] = new_data['date'].astype(str)
         if not df.empty:
             df = df[~df['date'].isin(new_data['date'])]
             df = pd.concat([df, new_data], ignore_index=True)
-        else: df = new_data
+        else:
+            df = new_data
+
     df = df.sort_values('date', ascending=False)
     df.to_csv(DB_FILE, index=False, encoding='utf-8-sig')
     return df
@@ -562,6 +669,7 @@ def calculate_monthly_stats(df):
         counts = exploded.groupby(['Month', 'stock']).size().reset_index(name='Count')
         counts['Strategy'] = strategy_name
         
+        # 【V117】Robust Lookup
         counts['Industry'] = counts['stock'].apply(get_stock_sector)
         all_stats.append(counts)
         
@@ -612,7 +720,7 @@ def show_dashboard():
     if day_df.empty: st.error("日期讀取錯誤"); return
     day_data = day_df.iloc[0]
 
-    # --- 【V114】預先抓取當日所有策略股的成交值 ---
+    # --- 【V117】預先抓取當日所有策略股的成交值 ---
     turnover_map = {}
     with st.spinner("正在計算策略選股成交值 (可能需要幾秒鐘)..."):
         all_strategy_stocks = [
@@ -622,6 +730,7 @@ def show_dashboard():
             day_data.get('boss_bargain_list', ''),
             day_data.get('top_revenue_list', '')
         ]
+        # 批次抓取
         turnover_map = prefetch_turnover_data(all_strategy_stocks, selected_date)
     
     st.markdown(f"""<div class="title-box"><h1 style='margin:0; font-size: 2.8rem;'>📅 {selected_date} 市場戰情室</h1><p style='margin-top:10px; opacity:0.9;'>資料更新於: {day_data['last_updated']}</p></div>""", unsafe_allow_html=True)
@@ -652,6 +761,7 @@ def show_dashboard():
     render_metric_card(c3, "💪 上班族強勢週", day_data['worker_strong_count'], "#3498db")
     render_metric_card(c4, "📈 上班族週趨勢", day_data['worker_trend_count'], "#9b59b6")
 
+    # 【V114】使用 render_stock_tags_v113 並傳入 turnover_map
     st.markdown('<div class="strategy-banner worker-banner"><p class="banner-text">👨‍💼 上班族策略 (Worker Strategy)</p></div>', unsafe_allow_html=True)
     w1, w2 = st.columns(2)
     with w1: st.markdown("### 🚀 強勢週 TOP 3"); st.markdown(render_stock_tags_v113(day_data['worker_strong_list'], turnover_map), unsafe_allow_html=True)
