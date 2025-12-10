@@ -20,8 +20,8 @@ try:
 except ImportError:
     from typing import TypedDict
 
-# --- 1. 頁面與 CSS (V103: 全球指數抓取修復版) ---
-st.set_page_config(layout="wide", page_title="StockTrack V103+GlobalFix", page_icon="🌏")
+# --- 1. 頁面與 CSS (V102: 全球市場即時報價) ---
+st.set_page_config(layout="wide", page_title="StockTrack V102+Global", page_icon="🌏")
 
 st.markdown("""
 <style>
@@ -334,11 +334,11 @@ def get_stock_sector(identifier):
     if clean_id in NAME_TO_SECTOR: return NAME_TO_SECTOR[clean_id]
     return "其他"
 
-# --- 【V103 更新】全球市場即時報價 (修復版) ---
+# --- 【V102 新增】全球市場即時報價 (Ticker Tape) ---
 @st.cache_data(ttl=60)
 def get_global_market_data():
     try:
-        # 定義要抓取的指數 (代號: 顯示名稱)
+        # 台股、日股、美股重要指數
         indices = {
             "^TWII": "🇹🇼 加權指數",
             "^TWOII": "🇹🇼 櫃買指數",
@@ -348,48 +348,42 @@ def get_global_market_data():
             "^SOX": "🇺🇸 費城半導體"
         }
         
-        market_data = []
+        tickers = list(indices.keys())
+        data = yf.download(tickers, period="5d", group_by='ticker', progress=False, threads=True)
         
-        # 逐一抓取 (避免批次失敗影響全部)
+        market_data = []
         for ticker, name in indices.items():
             try:
-                stock = yf.Ticker(ticker)
+                df = data[ticker]
+                if df.empty: continue
                 
-                # 1. 嘗試使用 fast_info (最即時，但指數有時會缺)
-                try:
-                    price = stock.fast_info['last_price']
-                    prev_close = stock.fast_info['previous_close']
-                except:
-                    price = None
-                    prev_close = None
+                # 取得最新一筆 (Close)
+                latest = df.iloc[-1]
+                price = latest['Close']
                 
-                # 2. 如果 fast_info 失敗 (常見於 ^TWOII 或美股盤前)
-                # 改抓歷史資料 (最後一筆收盤)
-                if price is None or pd.isna(price):
-                    hist = stock.history(period="5d") # 抓多天一點保險
-                    if not hist.empty:
-                        price = hist['Close'].iloc[-1]
-                        # 如果是今天還沒開盤，這會是昨天的收盤
-                        # 我們嘗試抓前一天的來算漲跌
-                        if len(hist) >= 2:
-                            prev_close = hist['Close'].iloc[-2]
-                        else:
-                            prev_close = price # 無法計算漲跌
+                # 取得前一交易日收盤 (作為比較基準)
+                # yfinance 的 prev close 比較準
+                stock_info = yf.Ticker(ticker).fast_info
+                prev_close = stock_info.previous_close
                 
-                # 3. 計算漲跌
-                if price and prev_close:
-                    change = price - prev_close
-                    pct_change = (change / prev_close) * 100
-                    
-                    market_data.append({
-                        "name": name,
-                        "price": f"{price:,.0f}",
-                        "change": change,
-                        "pct_change": pct_change
-                    })
-            except:
-                continue # 略過失敗的指數
+                if not prev_close:
+                    # 如果 fast_info 沒抓到，用歷史資料倒數第二筆
+                    if len(df) >= 2:
+                        prev_close = df.iloc[-2]['Close']
+                    else:
+                        prev_close = price # 無法計算漲跌
                 
+                change = price - prev_close
+                pct_change = (change / prev_close) * 100
+                
+                market_data.append({
+                    "name": name,
+                    "price": f"{price:,.0f}", # 指數通常不需小數點 (除了費半)
+                    "change": change,
+                    "pct_change": pct_change
+                })
+            except: continue
+            
         return market_data
     except: return []
 
@@ -398,9 +392,11 @@ def render_global_markets():
     markets = get_global_market_data()
     if markets:
         st.markdown("### 🌏 全球重要指數 (Real-time)")
-        # 動態計算欄位數 (避免空欄位)
         cols = st.columns(len(markets))
         for i, m in enumerate(markets):
+            # 設定顏色：台股習慣 紅漲(+) 綠跌(-)
+            # Streamlit metric 預設: Green(+), Red(-)
+            # delta_color="inverse" -> Red(+), Green(-)
             cols[i].metric(
                 label=m["name"],
                 value=m["price"],
@@ -448,66 +444,6 @@ def get_rank_v93_accurate(limit=20):
         df_rank['漲跌幅%'] = df_rank['漲跌幅%'].round(2)
         return df_rank.head(limit)
     except Exception as e: return f"System Error: {str(e)}"
-
-# --- 【V102 專業版】繪製 大盤指數 K 線圖 ---
-def plot_market_index(index_type='上市', period='6mo'):
-    ticker_map = {'上市': '^TWII', '上櫃': '^TWOII'}
-    ticker = ticker_map.get(index_type, '^TWII')
-    try:
-        stock = yf.Ticker(ticker)
-        df = stock.history(period=period)
-        if df.empty: return None, f"無法取得 {index_type} 指數資料"
-
-        # 計算均線 (新增 MA10)
-        df['MA5'] = df['Close'].rolling(window=5).mean()
-        df['MA10'] = df['Close'].rolling(window=10).mean() # 新增
-        df['MA20'] = df['Close'].rolling(window=20).mean()
-        df['MA60'] = df['Close'].rolling(window=60).mean()
-
-        # 建立雙軸圖表
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, 
-                            subplot_titles=(f'{index_type}指數', '成交量'), 
-                            row_width=[0.2, 0.8]) # 調整高度比例
-
-        # K線圖 (Row 1)
-        fig.add_trace(go.Candlestick(
-            x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
-            name='K線', increasing_line_color='#ef5350', decreasing_line_color='#26a69a'
-        ), row=1, col=1)
-
-        # 均線 (Row 1) - 專業配色與線條
-        fig.add_trace(go.Scatter(x=df.index, y=df['MA5'], line=dict(color='#9C27B0', width=1.5), name='MA5 (週)'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['MA10'], line=dict(color='#FFC107', width=1.5), name='MA10 (雙週)'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['MA20'], line=dict(color='#2196F3', width=1.5), name='MA20 (月)'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['MA60'], line=dict(color='#4CAF50', width=1.5), name='MA60 (季)'), row=1, col=1)
-
-        # 成交量 (Row 2)
-        colors = ['#ef5350' if row['Open'] - row['Close'] <= 0 else '#26a69a' for index, row in df.iterrows()]
-        fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=colors, name='成交量'), row=2, col=1)
-
-        # 專業版面設定
-        fig.update_layout(
-            height=600, # 增加高度
-            margin=dict(l=20, r=20, t=40, b=20),
-            paper_bgcolor='white', plot_bgcolor='#FAFAFA', # 極淡灰背景
-            font=dict(family="Arial, sans-serif", size=12, color='#333333'),
-            legend=dict(
-                orientation="h", yanchor="top", y=0.99, xanchor="left", x=0.01, # 圖例移至內部左上
-                bgcolor="rgba(255, 255, 255, 0.8)", bordercolor="#E0E0E0", borderwidth=1
-            ),
-            xaxis_rangeslider_visible=False,
-            hovermode='x unified' # 【關鍵】統一顯示十字準線資訊
-        )
-        
-        # 細緻格線設定
-        grid_style = dict(showgrid=True, gridwidth=1, gridcolor='#F0F0F0')
-        fig.update_xaxes(**grid_style, row=1, col=1)
-        fig.update_yaxes(**grid_style, title='指數', row=1, col=1)
-        fig.update_xaxes(**grid_style, row=2, col=1)
-        fig.update_yaxes(**grid_style, title='量', row=2, col=1)
-
-        return fig, ""
-    except Exception as e: return None, f"繪圖錯誤: {str(e)}"
 
 # --- UI 輔助函數 ---
 def render_metric_card(col, label, value, color_border="gray", sub_value=""):
@@ -688,21 +624,8 @@ def show_dashboard():
 
     st.markdown(f"""<div class="title-box"><h1 style='margin:0; font-size: 2.8rem;'>📅 {selected_date} 市場戰情室</h1><p style='margin-top:10px; opacity:0.9;'>資料更新於: {day_data['last_updated']}</p></div>""", unsafe_allow_html=True)
 
-    # 全球市場報價牆 (V103修復版)
+    # 全球市場報價牆 (V102)
     render_global_markets()
-
-    # K線圖區塊
-    with st.expander("📊 大盤指數走勢圖 (點擊展開)", expanded=True):
-        col_m1, col_m2 = st.columns([1, 4])
-        with col_m1:
-            market_type = st.radio("選擇市場", ["上市", "上櫃"], horizontal=True)
-            market_period = st.selectbox("週期", ["1mo", "3mo", "6mo", "1y"], index=2, key="market_period")
-        with col_m2:
-            fig, err = plot_market_index(market_type, market_period)
-            if fig: st.plotly_chart(fig, use_container_width=True)
-            else: st.warning(err)
-            
-    st.divider()
 
     c1, c2, c3, c4 = st.columns(4)
     wind_status = day_data['wind']; wind_color = "#2ecc71"
