@@ -329,8 +329,8 @@ def prefetch_turnover_data(stock_list_str, target_date):
         return {}
 
 # --- 全球市場即時報價 (V140: 自動刷新版) ---
-# 1. 修改：將快取時間縮短為 10 秒，確保資料即時性
-@st.cache_data(ttl=10)
+# 修改 A: 將快取時間 (ttl) 設為 3 秒，確保每次刷新都抓到新資料
+@st.cache_data(ttl=3)
 def get_global_market_data():
     try:
         indices = {"^TWII": "🇹🇼 加權指數", "^TWOII": "🇹🇼 櫃買指數", "^N225": "🇯🇵 日經225",
@@ -342,8 +342,12 @@ def get_global_market_data():
                 # 抓取最近 5 天以計算漲跌
                 hist = stock.history(period="5d")
                 if not hist.empty:
+                    # 取得最新一筆 (Close)
                     price = hist['Close'].iloc[-1]
+                    
+                    # 取得前一筆 (用於計算漲跌)
                     prev_close = hist['Close'].iloc[-2] if len(hist) >= 2 else price
+                    
                     change = price - prev_close
                     pct_change = (change / prev_close) * 100
                     
@@ -356,14 +360,19 @@ def get_global_market_data():
         return market_data
     except: return []
 
-# 2. 修改：加入 @st.fragment 並設定 run_every=10 (每10秒自動刷新此區塊)
-# 注意：此功能需要 Streamlit 1.37.0 以上版本
-@st.fragment(run_every=10)
+# 修改 B: 加入 @st.fragment 標籤，設定 run_every=5 (每5秒跑一次)
+@st.fragment(run_every=5)
 def render_global_markets():
+    # 這裡會呼叫上面的抓取函式
     markets = get_global_market_data()
+    
     if markets:
         st.markdown("### 🌏 全球重要指數 (Real-time)")
-        st.caption(f"最後更新: {datetime.now().strftime('%H:%M:%S')} (每 10 秒自動更新)")
+        
+        # 加入動態時間戳記，讓您確認它真的有在動
+        current_time = datetime.now().strftime("%H:%M:%S")
+        st.caption(f"⚡ 自動更新中 | 最後更新時間: {current_time} (每 5 秒刷新)")
+        
         cols = st.columns(len(markets))
         for i, m in enumerate(markets):
             with cols[i]:
@@ -375,6 +384,8 @@ def render_global_markets():
                 </div>
                 """, unsafe_allow_html=True)
         st.divider()
+    else:
+        st.warning("正在連線至全球股市資料...")
 
 # --- 真實爬蟲排行 ---
 @st.cache_data(ttl=60) 
@@ -881,4 +892,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
