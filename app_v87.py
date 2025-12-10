@@ -20,14 +20,14 @@ try:
 except ImportError:
     from typing import TypedDict
 
-# --- 1. 頁面與 CSS (V105: 族群資料庫地毯式補強) ---
-st.set_page_config(layout="wide", page_title="StockTrack V105+SectorComplete", page_icon="🏷️")
+# --- 1. 頁面與 CSS (V106: 全球指數視覺大升級) ---
+st.set_page_config(layout="wide", page_title="StockTrack V106+ProUI", page_icon="🌏")
 
 st.markdown("""
 <style>
     /* 1. 全域背景 (淺灰藍) 與深色文字 */
     .stApp {
-        background-color: #e8e8e8 !important;
+        background-color: #F0F2F6 !important;
         color: #333333 !important;
         font-family: 'Helvetica', 'Arial', sans-serif;
     }
@@ -41,39 +41,74 @@ st.markdown("""
     .title-box {
         background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
         padding: 30px; border-radius: 15px; margin-bottom: 25px; text-align: center;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
     }
-    .title-box h1 { color: #FFFFFF !important; font-size: 40px !important; }
-    .title-box p { color: #EEEEEE !important; font-size: 20px !important; }
+    .title-box h1 { color: #FFFFFF !important; font-size: 40px !important; margin-bottom: 10px !important; }
+    .title-box p { color: #E0E0E0 !important; font-size: 18px !important; }
 
-    /* --- 4. 數據卡片 (響應式設計) --- */
+    /* --- 4. 數據卡片 (主要指標) --- */
     div.metric-container {
         background-color: #FFFFFF !important; 
-        border-radius: 12px; padding: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center;
-        border: 1px solid #E0E0E0; border-top: 6px solid #3498db;
-        
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        
-        height: 220px !important;
+        border-radius: 12px; padding: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center;
+        border: 1px solid #E0E0E0; border-top: 5px solid #3498db;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        height: 200px !important;
     }
+    .metric-value { font-size: 3.2rem !important; font-weight: 800; color: #2c3e50 !important; margin: 10px 0; }
+    .metric-label { font-size: 1.5rem !important; color: #666666 !important; font-weight: 600; }
+    .metric-sub { font-size: 1.1rem !important; color: #888888 !important; font-weight: bold; margin-top: 5px; }
 
-    .metric-value { font-size: 3.0rem !important; font-weight: 800; color: #2c3e50 !important; margin: 10px 0; }
-    .metric-label { font-size: 2.2rem !important; color: #555555 !important; font-weight: 700; }
-    .metric-sub { font-size: 1.2rem !important; color: #888888 !important; font-weight: bold; margin-top: 5px; }
+    /* --- V106 新增：全球指數卡片樣式 --- */
+    .market-card {
+        background-color: #FFFFFF;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 5px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        border: 1px solid #EAEAEA;
+        transition: transform 0.2s;
+    }
+    .market-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+    }
+    .market-name {
+        font-size: 1.1rem;
+        font-weight: bold;
+        color: #555;
+        margin-bottom: 5px;
+    }
+    .market-price {
+        font-size: 2.0rem; /* 數字大一點 */
+        font-weight: 900;
+        margin: 5px 0;
+        font-family: 'Roboto', sans-serif;
+    }
+    .market-change {
+        font-size: 1.2rem;
+        font-weight: 700;
+    }
+    
+    /* 漲跌顏色定義 */
+    .up-color { color: #e74c3c !important; } /* 紅 */
+    .down-color { color: #27ae60 !important; } /* 綠 */
+    .flat-color { color: #7f8c8d !important; } /* 灰 */
+    
+    .card-up { border-bottom: 4px solid #e74c3c; background: linear-gradient(to bottom, #fff, #fff5f5); }
+    .card-down { border-bottom: 4px solid #27ae60; background: linear-gradient(to bottom, #fff, #f0fdf4); }
+    .card-flat { border-bottom: 4px solid #95a5a6; }
 
     /* 手機版優化 */
     @media (max-width: 900px) {
         div.metric-container {
-            height: auto !important;
-            min-height: 180px !important;
-            padding: 10px !important;
+            height: auto !important; min-height: 160px !important; padding: 10px !important;
         }
         .metric-value { font-size: 2.2rem !important; }
-        .metric-label { font-size: 1.5rem !important; }
+        .metric-label { font-size: 1.2rem !important; }
+        
+        .market-price { font-size: 1.6rem; } /* 手機版指數數字縮小一點 */
     }
 
     /* 5. 策略橫幅 */
@@ -82,13 +117,7 @@ st.markdown("""
         margin-top: 35px; margin-bottom: 20px; display: flex; align-items: center;
         box-shadow: 0 3px 6px rgba(0,0,0,0.15);
     }
-    .banner-text {
-        color: #FFFFFF !important;
-        font-size: 24px !important;
-        font-weight: 800 !important;
-        margin: 0 !important;
-    }
-    
+    .banner-text { color: #FFFFFF !important; font-size: 24px !important; font-weight: 800 !important; margin: 0 !important; }
     .worker-banner { background: linear-gradient(90deg, #2980b9, #3498db); }
     .boss-banner { background: linear-gradient(90deg, #c0392b, #e74c3c); }
     .revenue-banner { background: linear-gradient(90deg, #d35400, #e67e22); }
@@ -96,49 +125,26 @@ st.markdown("""
     /* 6. 股票標籤 */
     .stock-tag {
         display: inline-block; background-color: #FFFFFF; color: #2c3e50 !important;
-        border: 3px solid #bdc3c7; padding: 12px 24px; margin: 10px;
-        border-radius: 10px; font-weight: 800; font-size: 1.8rem;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        border: 2px solid #bdc3c7; padding: 10px 20px; margin: 8px;
+        border-radius: 8px; font-weight: 800; font-size: 1.6rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     .stock-tag-cb { background-color: #fff8e1; border-color: #f1c40f; color: #d35400 !important; }
-    .cb-badge { background-color: #e67e22; color: #FFFFFF !important; font-size: 0.7em; padding: 3px 8px; border-radius: 4px; margin-left: 10px; vertical-align: middle; }
+    .cb-badge { background-color: #e67e22; color: #FFFFFF !important; font-size: 0.7em; padding: 3px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
     
     /* 7. 表格優化 */
     .stDataFrame table { text-align: center !important; }
-    .stDataFrame th { font-size: 22px !important; color: #000000 !important; background-color: #E6E9EF !important; text-align: center !important; font-weight: 900 !important; }
-    .stDataFrame td { font-size: 20px !important; color: #333333 !important; background-color: #FFFFFF !important; text-align: center !important; }
+    .stDataFrame th { font-size: 18px !important; color: #000000 !important; background-color: #E6E9EF !important; text-align: center !important; font-weight: 900 !important; }
+    .stDataFrame td { font-size: 18px !important; color: #333333 !important; background-color: #FFFFFF !important; text-align: center !important; }
 
-    /* 8. 分頁標籤 */
+    /* 8. 分頁與選單 */
     button[data-baseweb="tab"] { background-color: #FFFFFF !important; border: 1px solid #ddd !important; }
-    button[data-baseweb="tab"] div p { color: #333333 !important; font-size: 20px !important; font-weight: 800 !important; }
     button[data-baseweb="tab"][aria-selected="true"] { background-color: #e3f2fd !important; border-bottom: 4px solid #3498db !important; }
-    
-    /* 9. 下拉選單 */
-    .stSelectbox label { font-size: 20px !important; color: #333333 !important; font-weight: bold !important; }
-    .stSelectbox div[data-baseweb="select"] > div { background-color: #2c3e50 !important; border-color: #2c3e50 !important; color: white !important; }
-    .stSelectbox div[data-baseweb="select"] > div * { color: #FFFFFF !important; }
-    .stSelectbox div[data-baseweb="select"] svg { fill: #FFFFFF !important; color: #FFFFFF !important; }
-    ul[data-baseweb="menu"], div[data-baseweb="popover"] div { background-color: #2c3e50 !important; }
+    .stSelectbox label { font-size: 18px !important; color: #333333 !important; font-weight: bold !important; }
+    .stSelectbox div[data-baseweb="select"] > div { background-color: #2c3e50 !important; color: white !important; }
+    .stSelectbox div[data-baseweb="select"] svg { fill: #FFFFFF !important; }
     li[role="option"] { background-color: #2c3e50 !important; color: #FFFFFF !important; }
-    li[role="option"]:hover, li[role="option"][aria-selected="true"] { background-color: #34495e !important; color: #f1c40f !important; }
-    li[role="option"] div { color: #FFFFFF !important; }
-    li[role="option"]:hover div { color: #f1c40f !important; }
-    
-    /* 10. 全球指數卡片 */
-    [data-testid="stMetricValue"] {
-        font-size: 2.6rem !important;
-        font-weight: 800 !important;
-        font-family: 'Arial', sans-serif;
-    }
-    [data-testid="stMetricLabel"] {
-        font-size: 1.4rem !important;
-        color: #555555 !important;
-        font-weight: bold !important;
-    }
-    [data-testid="stMetricDelta"] {
-        font-size: 1.1rem !important;
-        font-weight: bold !important;
-    }
+    li[role="option"]:hover { background-color: #34495e !important; color: #f1c40f !important; }
 
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
 </style>
@@ -149,7 +155,7 @@ try:
     if "GOOGLE_API_KEY" in st.secrets:
         GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     else:
-        GOOGLE_API_KEY = "AIzaSyCNYk70ekW1Zz4PQaGWhIZtupbxhB7VHhQ" 
+        GOOGLE_API_KEY = "請輸入你的API KEY" 
 except:
     GOOGLE_API_KEY = ""
 
@@ -199,42 +205,27 @@ BACKUP_FILE = 'stock_data_backup.csv'
 
 # --- 3. 核心函數 ---
 
-# 【V105】超完整股名 -> 族群對照表 (針對中小型飆股與策略股補強)
+# 【V101 核心】股名 -> 族群 直接對照表
 NAME_TO_SECTOR = {
-    # === 晶圓代工 ===
+    # === 半導體權值 ===
     "台積電": "晶圓代工", "聯電": "晶圓代工", "力積電": "晶圓代工", "世界": "晶圓代工",
-    
-    # === IP / ASIC (矽智財) ===
-    "世芯-KY": "IP矽智財", "創意": "IP矽智財", "智原": "IP矽智財", "M31": "IP矽智財",
-    "力旺": "IP矽智財", "晶心科": "IP矽智財", "巨有科技": "IP矽智財", "金麗科": "IP矽智財",
-    "愛普*": "IP/記憶體", "伊雲谷": "雲端/IP",
-    
-    # === IC設計 (權值/熱門) ===
-    "聯發科": "IC設計", "聯詠": "IC設計", "瑞昱": "IC設計", "祥碩": "IC設計", 
-    "譜瑞-KY": "IC設計", "信驊": "IC設計", "矽力-KY": "IC設計", "新唐": "IC設計", 
-    "天鈺": "IC設計", "晶豪科": "IC設計", "威盛": "IC設計", "矽創": "IC設計",
-    "茂達": "IC設計", "原相": "IC設計", "敦泰": "IC設計", "凌陽": "IC設計",
-    "聯陽": "IC設計", "揚智": "IC設計", "達發": "IC設計", "義隆": "IC設計",
-    "致新": "IC設計", "偉詮電": "IC設計", "通嘉": "IC設計", "點序": "IC設計",
-    "創惟": "IC設計", "鈺創": "IC設計", "九暘": "IC設計", "普誠": "IC設計",
-    "世紀": "IC設計", "安國": "神盾集團", "神盾": "神盾集團", "安格": "神盾集團",
-    "迅杰": "神盾集團", "芯鼎": "神盾集團",
+    "聯發科": "IC設計", "鴻海": "組裝代工", "日月光投控": "封測",
     
     # === 記憶體 & 模組 ===
     "群聯": "記憶體控制", "威剛": "記憶體模組", "十銓": "記憶體模組", "宇瞻": "記憶體模組",
     "宜鼎": "工控記憶體", "創見": "記憶體模組", "華邦電": "記憶體", "南亞科": "記憶體",
-    "旺宏": "記憶體", "品安": "記憶體模組", "廣穎": "記憶體模組",
+    "旺宏": "記憶體", "愛普*": "IP/記憶體", "晶豪科": "記憶體IC",
     
-    # === 散熱族群 (補強) ===
+    # === 散熱族群 ===
     "奇鋐": "散熱", "雙鴻": "散熱", "健策": "散熱", "高力": "散熱",
     "建準": "散熱", "力致": "散熱", "泰碩": "散熱", "元山": "散熱", 
     "尼得科超眾": "散熱", "協禧": "散熱", "廣運": "散熱/自動化", "富世達": "軸承/散熱",
     "動力-KY": "散熱", "萬在": "散熱",
     
     # === AI 伺服器 & 組裝 ===
-    "鴻海": "AI伺服器", "廣達": "AI伺服器", "緯創": "AI伺服器", "緯穎": "AI伺服器",
-    "英業達": "AI伺服器", "技嘉": "AI伺服器", "微星": "板卡/伺服器", "華碩": "AI伺服器",
-    "仁寶": "組裝代工", "和碩": "組裝代工", "宏碁": "AI PC", "神達": "伺服器",
+    "廣達": "AI伺服器", "緯創": "AI伺服器", "緯穎": "AI伺服器", "英業達": "AI伺服器",
+    "技嘉": "AI伺服器", "微星": "板卡/伺服器", "華碩": "AI伺服器", "仁寶": "組裝代工",
+    "和碩": "組裝代工", "宏碁": "AI PC", "神達": "伺服器",
     "藍天": "NB代工",
     
     # === 機殼 & 導軌 ===
@@ -247,7 +238,53 @@ NAME_TO_SECTOR = {
     "光環": "光通訊", "創威": "光通訊", "訊芯-KY": "CPO封測", "台通": "光通訊",
     "旺矽": "探針卡/CPO",
     
-    # === 設備 & 檢測 (CoWoS/PCB) ===
+    # === IP / ASIC ===
+    "世芯-KY": "IP矽智財", "創意": "IP矽智財", "智原": "IP矽智財", "M31": "IP矽智財",
+    "力旺": "IP矽智財", "晶心科": "IP矽智財", "巨有科技": "IP矽智財", "金麗科": "IP矽智財",
+    
+    # === IC 設計 (中小型/飆股) ===
+    "神盾": "神盾集團", "安國": "神盾集團", "安格": "神盾集團", "迅杰": "神盾集團", "芯鼎": "神盾集團",
+    "祥碩": "高速傳輸", "譜瑞-KY": "高速傳輸", "信驊": "BMC", "新唐": "MCU",
+    "天鈺": "驅動IC", "聯詠": "驅動IC", "瑞昱": "網通IC", "矽力-KY": "電源IC",
+    "茂達": "電源IC", "致新": "電源IC", "通嘉": "電源IC", "偉詮電": "電源IC",
+    "原相": "感測IC", "義隆": "觸控IC", "敦泰": "驅動IC", "凌陽": "IC設計",
+    "聯陽": "IC設計", "揚智": "IC設計", "九暘": "達發集團", "達發": "網通IC",
+    "世紀": "IC設計",
+    
+    # === 重電 & 綠能 ===
+    "華城": "重電", "士電": "重電", "中興電": "重電", "亞力": "重電", "東元": "重電",
+    "大同": "重電", "森崴能源": "綠能", "雲豹能源": "綠能", "世紀鋼": "風電",
+    "上緯投控": "風電", "華新": "電線電纜", "大亞": "電線電纜", "合機": "電線電纜",
+    "宏泰": "電線電纜",
+    
+    # === 連接器 & 線束 ===
+    "良維": "連接器", "貿聯-KY": "連接器", "信邦": "連接器", "維熹": "連接器",
+    "宏致": "連接器", "優群": "連接器", "嘉澤": "連接器", "凡甲": "連接器",
+    "詮欣": "連接器", "胡連": "車用連接器", "正崴": "連接器",
+    
+    # === PCB / CCL / 載板 ===
+    "台光電": "CCL銅箔", "台燿": "CCL銅箔", "聯茂": "CCL銅箔",
+    "金像電": "PCB", "健鼎": "PCB", "定穎投控": "PCB", "博智": "PCB", "華通": "PCB",
+    "楠梓電": "PCB", "燿華": "PCB", "敬鵬": "車用PCB",
+    "欣興": "ABF載板", "南電": "ABF載板", "景碩": "ABF載板",
+    "富喬": "PCB材料", "建榮": "PCB材料", "德宏": "PCB材料", "尖點": "PCB鑽針",
+    "達興材料": "特用化學",
+    
+    # === 特用化學 / 氣體 ===
+    "晶呈科技": "半導體特氣", "上品": "氟素設備", "三福化": "特用化學",
+    "中華化": "特用化學", "永光": "特用化學", "勝一": "特用化學",
+    
+    # === 被動元件 / 材料 ===
+    "國巨": "被動元件", "華新科": "被動元件", "勤凱": "被動元件/材料", "立隆電": "被動元件",
+    "信昌電": "被動元件", "禾伸堂": "被動元件", "凱美": "被動元件", "大毅": "被動元件",
+    
+    # === 電池 & 車用 ===
+    "AES-KY": "電池模組", "順達": "電池模組", "新普": "電池模組", "加百裕": "電池模組",
+    "台達電": "電源/EV", "康舒": "電源", "飛宏": "充電樁", "立德": "電源",
+    "精確": "車用零組件", "劍麟": "車用零組件", "堤維西": "AM車燈", "東陽": "AM汽材",
+    "帝寶": "AM車燈", "耿鼎": "AM鈑金",
+    
+    # === 設備 & 檢測 (CoWoS) ===
     "弘塑": "CoWoS設備", "辛耘": "CoWoS設備", "萬潤": "CoWoS設備", "均華": "CoWoS設備",
     "家登": "光罩盒", "致茂": "檢測設備", "閎康": "檢測分析", "宜特": "檢測分析",
     "京鼎": "設備", "帆宣": "設備", "亞翔": "廠務", "漢唐": "廠務",
@@ -259,39 +296,6 @@ NAME_TO_SECTOR = {
     "雍智科技": "測試介面", "精測": "測試介面", "穎崴": "測試介面", "旺矽": "探針卡",
     "中探針": "探針",
     
-    # === 重電 & 綠能 ===
-    "華城": "重電", "士電": "重電", "中興電": "重電", "亞力": "重電", "東元": "重電",
-    "大同": "重電", "森崴能源": "綠能", "雲豹能源": "綠能", "世紀鋼": "風電",
-    "上緯投控": "風電", "華新": "電線電纜", "大亞": "電線電纜", "合機": "電線電纜",
-    "宏泰": "電線電纜", "泓德能源": "綠能",
-    
-    # === 連接器 & 線束 ===
-    "良維": "連接器", "貿聯-KY": "連接器", "信邦": "連接器", "維熹": "連接器",
-    "宏致": "連接器", "優群": "連接器", "嘉澤": "連接器", "凡甲": "連接器",
-    "詮欣": "連接器", "胡連": "車用連接器", "正崴": "連接器",
-    
-    # === PCB / CCL / 載板 / 材料 ===
-    "台光電": "CCL銅箔", "台燿": "CCL銅箔", "聯茂": "CCL銅箔",
-    "金像電": "PCB", "健鼎": "PCB", "定穎投控": "PCB", "博智": "PCB", "華通": "PCB",
-    "楠梓電": "PCB", "燿華": "PCB", "敬鵬": "車用PCB", "瀚宇博": "PCB",
-    "欣興": "ABF載板", "南電": "ABF載板", "景碩": "ABF載板",
-    "富喬": "PCB材料", "建榮": "PCB材料", "德宏": "PCB材料", "尖點": "PCB鑽針",
-    "達興材料": "特用化學",
-    
-    # === 特用化學 / 氣體 ===
-    "晶呈科技": "半導體特氣", "上品": "氟素設備", "三福化": "特用化學",
-    "中華化": "特用化學", "永光": "特用化學", "勝一": "特用化學",
-    
-    # === 被動元件 & 材料 ===
-    "國巨": "被動元件", "華新科": "被動元件", "勤凱": "被動元件/材料", "立隆電": "被動元件",
-    "信昌電": "被動元件", "禾伸堂": "被動元件", "凱美": "被動元件", "大毅": "被動元件",
-    
-    # === 電池 & 車用 & AM ===
-    "AES-KY": "電池模組", "順達": "電池模組", "新普": "電池模組", "加百裕": "電池模組",
-    "台達電": "電源/EV", "康舒": "電源", "飛宏": "充電樁", "立德": "電源",
-    "精確": "車用零組件", "劍麟": "車用零組件", "堤維西": "AM車燈", "東陽": "AM汽材",
-    "帝寶": "AM車燈", "耿鼎": "AM鈑金",
-    
     # === 系統整合 & IPC ===
     "三商電": "系統整合", "精誠": "系統整合", "零壹": "資安", "邁達特": "系統整合",
     "凌華": "IPC/機器人", "樺漢": "IPC", "研華": "IPC", "廣積": "IPC", "友通": "IPC",
@@ -300,34 +304,30 @@ NAME_TO_SECTOR = {
     
     # === 機器人概念 ===
     "所羅門": "機器人", "羅昇": "機器人", "盟立": "機器人", "昆盈": "機器人",
-    "廣明": "機器人", "聰泰": "機器人", "圓剛": "機器人", "台灣精銳": "減速機",
+    "廣明": "機器人", "聰泰": "機器人", "圓剛": "機器人",
     
     # === 網通 ===
     "智邦": "網通", "中磊": "網通", "啟碁": "網通", "明泰": "網通", "正文": "網通",
-    "合勤控": "網通", "神準": "網通", "智易": "網通", "友訊": "網通", "建漢": "網通",
-    
-    # === 砷化鎵 / 三五族 ===
-    "穩懋": "砷化鎵", "宏捷科": "砷化鎵", "全新": "砷化鎵", "IET-KY": "砷化鎵",
+    "合勤控": "網通", "神準": "網通", "智易": "網通",
     
     # === 生技 ===
     "保瑞": "生技CDMO", "美時": "生技", "藥華藥": "生技", "合一": "生技",
-    "北極星藥業-KY": "生技", "智擎": "生技", "台康生技": "生技", "高端疫苗": "生技",
+    "北極星藥業-KY": "生技", "智擎": "生技", "台康生技": "生技",
     
     # === 航運 ===
     "長榮": "貨櫃航運", "陽明": "貨櫃航運", "萬海": "貨櫃航運",
     "長榮航": "航空", "華航": "航空", "星宇航空": "航空",
-    "裕民": "散裝", "慧洋-KY": "散裝", "新興": "散裝",
+    "裕民": "散裝", "慧洋-KY": "散裝",
     
     # === 金融 ===
     "富邦金": "金融", "國泰金": "金融", "中信金": "金融", "兆豐金": "金融",
-    "開發金": "金融", "元大金": "金融", "玉山金": "金融", "臺企銀": "金融",
-    "新光金": "金融", "台新金": "金融", "永豐金": "金融",
+    "開發金": "金融", "元大金": "金融", "玉山金": "金融",
     
     # === 其他常見 ===
     "元太": "電子紙", "亞光": "光學", "先進光": "光學", "大立光": "光學",
     "中鋼": "鋼鐵", "台泥": "水泥", "統一": "食品",
     "美利達": "自行車", "巨大": "自行車", "豐泰": "製鞋", "寶成": "製鞋",
-    "京元電子": "封測", "京元電": "封測", "日月光": "封測"
+    "京元電子": "封測", "京元電": "封測", "IET-KY": "砷化鎵"
 }
 
 # 【V101 核心】代碼與族群對照 (用於排行榜)
@@ -344,7 +344,6 @@ TW_STOCK_INFO = {
     "3661": ("世芯-KY", "IP矽智財"), "3017": ("奇鋐", "散熱"), "3324": ("雙鴻", "散熱"),
     "2345": ("智邦", "網通"), "3711": ("日月光投控", "封測"), "2368": ("金像電", "PCB"),
     "2383": ("台光電", "CCL銅箔"), "6213": ("聯茂", "CCL銅箔"), "6805": ("富世達", "軸承/散熱"),
-    "2353": ("宏碁", "AI PC"), "2324": ("仁寶", "組裝代工"), "2301": ("光寶科", "電源"),
     
     # 權值/熱門 (上櫃)
     "8299": ("群聯", "記憶體控制"), "8069": ("元太", "電子紙"), "6488": ("環球晶", "矽晶圓"),
@@ -356,10 +355,7 @@ TW_STOCK_INFO = {
     "5289": ("宜鼎", "工控記憶體"), "4760": ("勤凱", "被動元件/材料"), "6683": ("雍智科技", "測試介面"),
     "8996": ("高力", "散熱"), "6187": ("萬潤", "CoWoS設備"), "3583": ("辛耘", "CoWoS設備"),
     "6138": ("茂達", "IC設計"), "3680": ("家登", "半導體設備"), "5425": ("台半", "二極體"),
-    "3260": ("威剛", "記憶體"), "8046": ("南電", "ABF載板"), "1815": ("富喬", "PCB材料"),
-    "4768": ("晶呈科技", "半導體特氣"), "8112": ("至上", "IC通路"), "5314": ("世紀", "IC設計"),
-    "3162": ("精確", "車用零組件"), "4971": ("IET-KY", "砷化鎵"), "3167": ("大量", "半導體設備"),
-    "8021": ("尖點", "PCB鑽針")
+    "3260": ("威剛", "記憶體"), "8046": ("南電", "ABF載板")
 }
 
 # 輔助函式：取得名稱
@@ -374,7 +370,7 @@ def get_stock_sector(identifier):
     if clean_id in NAME_TO_SECTOR: return NAME_TO_SECTOR[clean_id]
     return "其他"
 
-# --- 【V104 新增】全球市場即時報價 (修復版) ---
+# --- 【V104 新增】全球市場即時報價 (強制歷史數據法) ---
 @st.cache_data(ttl=60)
 def get_global_market_data():
     try:
@@ -412,11 +408,23 @@ def get_global_market_data():
                     change = price - prev_close
                     pct_change = (change / prev_close) * 100
                     
+                    # 顏色邏輯：漲=紅, 跌=綠, 平=灰
+                    color_class = "flat-color"
+                    if change > 0: color_class = "up-color"
+                    elif change < 0: color_class = "down-color"
+                    
+                    # 卡片邊框邏輯
+                    card_class = "card-flat"
+                    if change > 0: card_class = "card-up"
+                    elif change < 0: card_class = "card-down"
+                    
                     market_data.append({
                         "name": name,
                         "price": f"{price:,.0f}", # 指數整數位
                         "change": change,
-                        "pct_change": pct_change
+                        "pct_change": pct_change,
+                        "color_class": color_class,
+                        "card_class": card_class
                     })
             except:
                 continue # 略過失敗的指數
@@ -424,21 +432,32 @@ def get_global_market_data():
         return market_data
     except: return []
 
-# --- 顯示全球市場區塊 ---
+# --- 【V106 新增】渲染美化後的全球指數卡片 ---
 def render_global_markets():
     markets = get_global_market_data()
-    if markets:
-        st.markdown("### 🌏 全球重要指數 (Real-time)")
-        # 動態計算欄位數 (避免空欄位)
-        cols = st.columns(len(markets))
-        for i, m in enumerate(markets):
-            cols[i].metric(
-                label=m["name"],
-                value=m["price"],
-                delta=f"{m['change']:+.0f} ({m['pct_change']:+.2f}%)",
-                delta_color="inverse" # 紅漲綠跌
-            )
-        st.divider()
+    
+    if not markets:
+        st.warning("暫時無法取得全球市場數據 (請稍後再試)")
+        return
+
+    st.markdown("### 🌏 全球重要指數 (Real-time)")
+    
+    # 使用 CSS Grid 或 Columns 排版
+    cols = st.columns(len(markets))
+    
+    for i, m in enumerate(markets):
+        with cols[i]:
+            # 使用 HTML/CSS 自定義卡片
+            st.markdown(f"""
+            <div class="market-card {m['card_class']}">
+                <div class="market-name">{m['name']}</div>
+                <div class="market-price {m['color_class']}">{m['price']}</div>
+                <div class="market-change {m['color_class']}">
+                    {m['change']:+.0f} ({m['pct_change']:+.2f}%)
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    st.divider()
 
 # --- 排行榜抓取 (V101: 暴力修正 "8299O" 問題) ---
 @st.cache_data(ttl=60) 
@@ -719,7 +738,7 @@ def show_dashboard():
 
     st.markdown(f"""<div class="title-box"><h1 style='margin:0; font-size: 2.8rem;'>📅 {selected_date} 市場戰情室</h1><p style='margin-top:10px; opacity:0.9;'>資料更新於: {day_data['last_updated']}</p></div>""", unsafe_allow_html=True)
 
-    # 全球市場報價牆 (V103修復版)
+    # 全球市場報價牆 (V106 優化版)
     render_global_markets()
 
     # K線圖區塊
