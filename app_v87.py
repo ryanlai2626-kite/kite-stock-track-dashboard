@@ -328,7 +328,7 @@ def prefetch_turnover_data(stock_list_str, target_date):
     except Exception as e:
         return {}
 
-# --- 【V150】全時段市場即時報價 (fast_info 精準版) ---
+# --- 【V150】全時段市場即時報價 (fast_info + 補值) ---
 def get_global_market_data_live():
     indices = {
         "^TWII": "🇹🇼 加權指數", "^TWOII": "🇹🇼 櫃買指數", "^N225": "🇯🇵 日經225",
@@ -340,22 +340,26 @@ def get_global_market_data_live():
         try:
             stock = yf.Ticker(ticker)
             
-            # 使用 fast_info 獲取最新即時報價 (最準確，不會有NaN)
-            # last_price = 最新成交價, previous_close = 昨日收盤價
+            # 使用 fast_info 獲取最新即時報價
             price = stock.fast_info.get('last_price')
             prev_close = stock.fast_info.get('previous_close')
             
-            # 如果 fast_info 失敗，才退回使用 history
-            if price is None or pd.isna(price):
+            # 【V150 補丁】如果 fast_info 失敗 (例如櫃買常發生)，退回 history (5日K)
+            if price is None or pd.isna(price) or price == 0:
                 hist = stock.history(period="5d")
                 if not hist.empty:
-                    price = hist['Close'].iloc[-1]
-                    prev_close = hist['Close'].iloc[-2] if len(hist) >= 2 else price
-            
-            if price is None or pd.isna(price): continue
+                    # 拿最後一筆 Close 當作 price
+                    price = float(hist['Close'].iloc[-1])
+                    # 拿倒數第二筆 Close 當作 prev_close (昨收)
+                    if len(hist) >= 2:
+                        prev_close = float(hist['Close'].iloc[-2])
+                    else:
+                        prev_close = price
+
+            if price is None or pd.isna(price) or price == 0: continue
 
             change = price - prev_close
-            pct_change = (change / prev_close) * 100
+            pct_change = (change / prev_close) * 100 if prev_close != 0 else 0
             
             color_class = "up-color" if change > 0 else ("down-color" if change < 0 else "flat-color")
             card_class = "card-up" if change > 0 else ("card-down" if change < 0 else "card-flat")
@@ -898,6 +902,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
