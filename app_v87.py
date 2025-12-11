@@ -21,8 +21,8 @@ try:
 except ImportError:
     from typing import TypedDict
 
-# --- 1. 頁面與 CSS (V149: 恐懼指數型態修復版) ---
-st.set_page_config(layout="wide", page_title="StockTrack V149", page_icon="💰")
+# --- 1. 頁面與 CSS (V150: 雲端環境強制修復版) ---
+st.set_page_config(layout="wide", page_title="StockTrack V150", page_icon="💰")
 
 st.markdown("""
 <style>
@@ -97,7 +97,7 @@ st.markdown("""
     li[role="option"] { background-color: #2c3e50 !important; color: #FFFFFF !important; }
     li[role="option"]:hover { background-color: #34495e !important; color: #f1c40f !important; }
     
-    /* V147 新增: 恐懼貪婪歷史表格樣式 */
+    /* 恐懼貪婪表格 */
     .fg-history-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #eee; font-size: 14px; }
     .fg-label { color: #666; font-weight: bold; }
     .fg-val-box { padding: 2px 8px; border-radius: 4px; color: white; font-weight: bold; font-size: 14px; min-width: 40px; text-align: center; }
@@ -176,7 +176,7 @@ MASTER_STOCK_DB = {
     "2312": ("金寶", "組裝代工"), "3413": ("京鼎", "半導體設備"), "8155": ("博智", "PCB/伺服器板"),
     "5388": ("中磊", "網通"), "3217": ("優群", "連接器"), "3090": ("日電貿", "被動元件"),
     "2472": ("立隆電", "被動元件"), "8042": ("金山電", "被動元件"), "2337": ("旺宏", "記憶體"),
-    "3357": ("臺慶科", "被動元件"), "6667": ("信紘科", "廠務設備"), "2404": ("漢科", "廠務設備"),
+    "3357": ("臺慶科", "被動元件"), "6667": ("信紘科", "廠務設備"), "2404": ("漢唐", "無塵室/廠務"),
     "6691": ("洋基工程", "廠務工程"), "1802": ("台玻", "玻璃"), "3529": ("力旺", "IP矽智財"),
     "3105": ("穩懋", "砷化鎵"), "5347": ("世界", "晶圓代工"), "5269": ("祥碩", "IC設計"),
     
@@ -353,8 +353,8 @@ def prefetch_turnover_data(stock_list_str, target_date, manual_override_json=Non
     except Exception as e:
         return result_map
 
-# --- 全球市場即時報價 (V146: 使用 fast_info 確保即時性) ---
-@st.cache_data(ttl=10) # 縮短快取時間至10秒
+# --- 全球市場即時報價 (V150: 雲端環境強制手動計算修復版) ---
+@st.cache_data(ttl=15) # 稍微放寬 TTL 避免一直被擋，但保持相對即時
 def get_global_market_data():
     try:
         # 定義指數代碼與名稱
@@ -372,30 +372,22 @@ def get_global_market_data():
         for ticker_code, name in indices.items():
             try:
                 stock = yf.Ticker(ticker_code)
-                # V146 Fix: 使用 fast_info 獲取即時交易所數據，而非歷史K線
-                try:
-                    info = stock.fast_info
-                    price = info.last_price
-                    prev_close = info.previous_close
-                    
-                    if price is None or prev_close is None:
-                        # 如果 fast_info 失敗，回退到歷史資料模式
-                        hist = stock.history(period="5d")
-                        if len(hist) >= 2:
-                            price = hist['Close'].iloc[-1]
-                            prev_close = hist['Close'].iloc[-2]
-                        else:
-                            continue
-                except:
-                    # 如果 fast_info 屬性不存在或報錯，回退到歷史資料
-                    hist = stock.history(period="5d")
-                    if len(hist) >= 2:
-                        price = hist['Close'].iloc[-1]
-                        prev_close = hist['Close'].iloc[-2]
-                    else:
-                        continue
-
-                change = price - prev_close
+                
+                # V150 關鍵修正：在雲端環境放棄使用 fast_info 或 info
+                # 改為強制抓取過去 5 天的歷史數據，並手動計算 最新價 vs 昨日收盤價
+                # 這樣可以避免雲端主機時間差導致 Yahoo 回傳錯誤的 change 數據
+                hist = stock.history(period="5d", interval="1d")
+                
+                if hist.empty or len(hist) < 2:
+                    continue
+                
+                # 取得最新一筆 (今天的收盤或即時價)
+                last_price = hist['Close'].iloc[-1]
+                
+                # 取得倒數第二筆 (昨天的收盤價)
+                prev_close = hist['Close'].iloc[-2]
+                
+                change = last_price - prev_close
                 pct_change = (change / prev_close) * 100
                 
                 # 顏色邏輯
@@ -404,7 +396,7 @@ def get_global_market_data():
                 
                 market_data.append({
                     "name": name, 
-                    "price": f"{price:,.2f}", 
+                    "price": f"{last_price:,.2f}", 
                     "change": change, 
                     "pct_change": pct_change, 
                     "color_class": color_class, 
@@ -412,7 +404,6 @@ def get_global_market_data():
                 })
                     
             except Exception as e:
-                # 容錯：單一指數失敗不影響其他顯示
                 print(f"Error fetching {ticker_code}: {e}")
                 continue
                 
@@ -421,7 +412,7 @@ def get_global_market_data():
         print(f"Global Market Data Error: {e}")
         return []
 
-# --- V149: 恐懼與貪婪指數 (修復型態錯誤: str vs int) ---
+# --- V150: 恐懼與貪婪指數 (Header偽裝 + 錯誤處理) ---
 @st.cache_data(ttl=3600)
 def get_cnn_fear_greed_full():
     """
@@ -429,23 +420,25 @@ def get_cnn_fear_greed_full():
     """
     url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
     
-    # 模擬真實瀏覽器 Header
+    # 模擬真實瀏覽器 Header (User-Agent Rotation 概念)
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer": "https://www.cnn.com/",
         "Origin": "https://www.cnn.com",
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "en-US,en;q=0.9",
-        "Connection": "keep-alive"
+        "Connection": "keep-alive",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site"
     }
     
     try:
-        r = requests.get(url, headers=headers, timeout=8)
+        r = requests.get(url, headers=headers, timeout=10) # 延長 Timeout
         if r.status_code == 200:
             data = r.json()
             
-            # V149 Fix: 安全取得並轉型 (Safe Type Casting)
-            # 因為 CNN API 可能回傳 string 或 int，這裡統一轉 float 再轉 int
+            # 安全轉型
             def safe_get_score(val):
                 try: return int(float(val))
                 except: return 50
@@ -468,11 +461,11 @@ def get_cnn_fear_greed_full():
                 if not history_data: return None, None
                 target_ts = (datetime.now() - timedelta(days=days)).timestamp() * 1000
                 
-                # 確保 history item 裡的 x 和 y 也是數字
                 def get_x(item): 
                     try: return float(item['x']) 
                     except: return 0.0
                     
+                if not history_data: return None, None
                 closest = min(history_data, key=lambda item: abs(get_x(item) - target_ts))
                 
                 try:
@@ -503,21 +496,17 @@ def get_cnn_fear_greed_full():
                     "year": {"score": year_ago, "date": year_date}
                 }
             }
+        elif r.status_code == 403:
+            return {"error": "CNN拒絕存取 (403 Forbidden - Cloud Block)"}
         else:
             return {"error": f"HTTP {r.status_code}"}
+    except requests.exceptions.Timeout:
+        return {"error": "連線逾時 (Timeout)"}
     except Exception as e:
         return {"error": str(e)}
 
 def get_rating_label_cn(score):
     if score is None: return "未知", "#95a5a6"
-    # CNN Original: 0-25 Extreme Fear, 25-45 Fear, 45-55 Neutral, 55-75 Greed, 75-100 Extreme Greed
-    # Color Match: 
-    # Ext Fear: #FF6B6B (Light Red)
-    # Fear: #FFD93D (Orange)
-    # Neutral: #E0E0E0 (Gray)
-    # Greed: #6BCB77 (Light Green)
-    # Ext Greed: #4D96FF (Dark Green - or CNN uses simple Green)
-    
     if score < 25: return "極度恐懼", "#e74c3c" # Red
     elif score < 45: return "恐懼", "#e67e22" # Orange
     elif score <= 55: return "中立", "#95a5a6" # Gray
@@ -571,15 +560,14 @@ def render_global_markets():
             
     st.divider()
 
-    # 2. 下半部：恐懼貪婪指數儀表板 (V149: 含除錯模式與型態修正)
+    # 2. 下半部：恐懼貪婪指數儀表板 (V150: 含除錯模式)
     fg_data = get_cnn_fear_greed_full()
     
     st.subheader("😱 恐懼與貪婪指數 (Fear & Greed Index)")
 
-    # V148 Fix: 如果 API 失敗，顯示錯誤原因或 Fallback，而不是隱形
+    # V150 Fix: 如果 API 失敗，顯示錯誤原因或 Fallback，而不是隱形
     if fg_data and "error" in fg_data:
-        st.warning(f"⚠️ 無法取得 CNN 即時數據 (原因: {fg_data['error']})，可能是來源網站阻擋爬蟲。")
-        # 可以考慮顯示一個靜態圖片或預設值
+        st.warning(f"⚠️ 無法取得 CNN 即時數據 (原因: {fg_data['error']})。可能是因為雲端主機 IP 被新聞網站防火牆阻擋。建議稍後再試。")
     elif fg_data:
         c1, c2 = st.columns([1, 1])
         
@@ -780,12 +768,12 @@ def load_db():
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
             
-            # V144 Fix: 強制處理 manual_turnover 為字串，避免 data_editor 報錯
+            # V150 Fix: 即使 CSV 檔沒有 'manual_turnover' 欄位 (雲端舊檔)，也強制在記憶體中建立
             if 'manual_turnover' not in df.columns:
                 df['manual_turnover'] = ""
-            else:
-                # 關鍵修正：將 NaN 或 float 強制轉為字串，並把 'nan' 字串清空
-                df['manual_turnover'] = df['manual_turnover'].astype(str).replace('nan', '')
+            
+            # V150 Fix: 強制轉型，避免編輯器報錯
+            df['manual_turnover'] = df['manual_turnover'].astype(str).replace('nan', '')
                 
             if 'date' in df.columns:
                 df['date'] = df['date'].astype(str)
