@@ -3,7 +3,7 @@ google-generativeai
 pandas
 altair
 yfinance
+plotly
 requests
 lxml
-plotly
 fake-useragent
