@@ -1386,83 +1386,104 @@ def calculate_monthly_stats(df):
 import math
 import plotly.graph_objects as go
 
-# --- [V5.0] 風度儀表板 (10區塊精準版: 4綠-2灰-4紅) ---
+# --- [V5.2] 風度儀表板 (版面微調精修版) ---
 def plot_wind_gauge_bias_driven(
     taiex_wind, taiex_streak, taiex_bias,
     tpex_wind, tpex_streak, tpex_bias,
     taiex_data, tpex_data
 ):
     """
-    修改重點 V5.0:
-    1. 區塊總數改為 10 格 (Block Count = 10)
-    2. 分區比例: 無風陣風(4格) / 交界(2格) / 強風亂流(4格)
-    3. 乖離率判斷邏輯更新 (-4%, -3%, -2%, -1%, 0%, 1%, 2%, 3%, 4%)
+    修改重點 V5.2:
+    1. 微調指針長度 (R_CURSOR_TIP) 避免與文字重疊。
+    2. 調整底部文字 (循環名稱、天數) 的 Y 軸位置與字體大小。
+    3. 加大中央指數數值字體，提升易讀性。
     """
     
     # 1. 基礎配置 (10 格設計)
     BLOCK_COUNT = 10
-    BLOCK_WIDTH = 100 / BLOCK_COUNT  # 每一格佔 10 分
+    BLOCK_WIDTH = 100 / BLOCK_COUNT
     
-    # --- 定義 10 個區塊的顏色 (4綠, 2灰, 4紅) ---
-    # 綠色區 (4格): 深綠 -> 中綠 -> 亮綠 -> 螢光綠
+    # --- 定義 10 個區塊的顏色 ---
     c_green_list = ['#00E676', '#02C874', '#96FED1', '#C1FFE4']
-    # 灰色區 (2格): 深灰 -> 淺灰
     c_gray_list  = ['#455A64', '#90A4AE']
-    # 紅色區 (4格): 橘紅 -> 亮紅 -> 深紅 -> 紫紅 (代表過熱)
     c_red_list   = ['#FFB5B5', '#FF7575', '#FF5151', '#FF0000']
     
     block_colors_final = c_green_list + c_gray_list + c_red_list
 
-    # 基準色 (用於文字標籤)
     c_green_base = '#00E676' 
     c_gray_base  = '#BDC3C7'
     c_red_base   = '#FF2D00'
     
-    # 指針顏色
     COLOR_TAIEX_PTR = "#29B6F6"  # 淺藍
-    COLOR_TPEX_PTR  = "#EA7500"  # 紫紅
+    COLOR_TPEX_PTR  = "#EA7500"  # 橘
 
-    # --- 計算指針分數 (根據新的 10 區間邏輯) ---
+    # --- 計算指針分數 ---
     def calc_score(bias_rate, streak_days):
         target_block = 0
+        if bias_rate < -4.0:             target_block = 0
+        elif -4.0 <= bias_rate < -3.0:   target_block = 1
+        elif -3.0 <= bias_rate < -2.0:   target_block = 2
+        elif -2.0 <= bias_rate < -1.0:   target_block = 3
+        elif -1.0 <= bias_rate < 0.0:    target_block = 4
+        elif 0.0 <= bias_rate <= 1.0:    target_block = 5
+        elif 1.0 < bias_rate <= 2.0:     target_block = 6
+        elif 2.0 < bias_rate <= 3.0:     target_block = 7
+        elif 3.0 < bias_rate <= 4.0:     target_block = 8
+        else:                            target_block = 9
         
-        # 1. 無風-陣風循環 (4格, Index 0-3)
-        if bias_rate < -4.0:             target_block = 0  # < -4%
-        elif -4.0 <= bias_rate < -3.0:   target_block = 1  # -4% ~ -3%
-        elif -3.0 <= bias_rate < -2.0:   target_block = 2  # -3% ~ -2%
-        elif -2.0 <= bias_rate < -1.0:   target_block = 3  # -2% ~ -1%
-        
-        # 2. 循環交界 (2格, Index 4-5)
-        elif -1.0 <= bias_rate < 0.0:    target_block = 4  # -1% ~ 0%
-        elif 0.0 <= bias_rate <= 1.0:    target_block = 5  # 0% ~ 1%
-        
-        # 3. 強風-亂流循環 (4格, Index 6-9)
-        elif 1.0 < bias_rate <= 2.0:     target_block = 6  # 1% ~ 2%
-        elif 2.0 < bias_rate <= 3.0:     target_block = 7  # 2% ~ 3%
-        elif 3.0 < bias_rate <= 4.0:     target_block = 8  # 3% ~ 4%
-        else:                            target_block = 9  # > 4%
-        
-        # 計算細部位置：每一格代表「持續天數 0~10 天」
-        # 若天數超過 10 天，就填滿該格
         base_score = target_block * BLOCK_WIDTH
         capped_days = min(streak_days, 10)
         days_offset = (capped_days / 10.0) * BLOCK_WIDTH
-        
         score = base_score + days_offset
         return max(0, min(100, score))
 
     score_taiex = calc_score(taiex_bias, taiex_streak)
     score_tpex  = calc_score(tpex_bias, tpex_streak)
 
+    # --- 動態生成循環文字 Helper ---
+    def get_cycle_display_text(bias_rate, wind_str):
+        clean_wind = str(wind_str).strip()
+        if bias_rate < -1.0:
+            cycle_type = "Passive"
+        elif -1.0 <= bias_rate <= 1.0:
+            cycle_type = "Transition"
+        else:
+            cycle_type = "Active"
+
+        if cycle_type == "Active":
+            base = " / 亂流循環"
+            prefix = "強風"
+            if "強風" in clean_wind: return f"<b>{prefix}</b>{base}"
+            elif "亂流" in clean_wind: return f"{prefix} / <b>亂流</b>循環"
+            else: return f"{prefix}{base}"
+
+        elif cycle_type == "Passive":
+            base = " / 陣風循環"
+            prefix = "無風"
+            if "無風" in clean_wind: return f"<b>{prefix}</b>{base}"
+            elif "陣風" in clean_wind: return f"{prefix} / <b>陣風</b>循環"
+            else: return f"{prefix}{base}"
+
+        elif cycle_type == "Transition":
+            return f"循環交界 ({clean_wind})"
+            
+        return clean_wind
+
+    text_taiex_bottom = get_cycle_display_text(taiex_bias, taiex_wind)
+    text_tpex_bottom = get_cycle_display_text(tpex_bias, tpex_wind)
+
     # --- 繪圖 ---
     fig = go.Figure()
 
-    # 幾何參數
+    # 幾何參數 (微調版)
     R_OUTER_RING = 1.08    
     R_MAIN_ARC = 1.00      
     R_TICK_IN = 0.88       
-    R_CURSOR_TIP = 0.86    
-    R_CURSOR_BASE = 0.74   
+    
+    # 【修改 1】縮短指針長度，避免戳到文字
+    R_CURSOR_TIP = 0.82    # 原本 0.86 -> 改為 0.82
+    R_CURSOR_BASE = 0.72   # 原本 0.74 -> 改為 0.72
+    
     R_LABEL = 1.30         
     
     def get_xy_from_angle(r, angle_deg):
@@ -1471,40 +1492,35 @@ def plot_wind_gauge_bias_driven(
 
     shapes = []
 
-    # 2. 外環 (裝飾)
+    # 2. 外環
     ring_x, ring_y = [], []
     for s in range(181):
         rx, ry = get_xy_from_angle(R_OUTER_RING, 180 - s)
         ring_x.append(rx); ring_y.append(ry)
     fig.add_trace(go.Scatter(x=ring_x, y=ring_y, mode='lines', line=dict(color='#444444', width=1), hoverinfo='skip', showlegend=False))
 
-    # 3. 色塊 (10個)
+    # 3. 色塊
     for i in range(BLOCK_COUNT):
         start_pct = i * BLOCK_WIDTH
         end_pct = (i + 1) * BLOCK_WIDTH
-        
-        # 區塊間隙 (Gap)
         gap = 0.5 
         start_angle = 180 - (start_pct / 100 * 180) - (0 if i==0 else gap)
         end_angle = 180 - (end_pct / 100 * 180) + (0 if i==BLOCK_COUNT-1 else gap)
         
         x_pts, y_pts = [], []
-        steps = 10 # 格數變多，steps 可以少一點優化效能
+        steps = 10
         for s in range(steps + 1):
             ang = start_angle + (end_angle - start_angle) * (s / steps)
             x, y = get_xy_from_angle(R_MAIN_ARC, ang)
             x_pts.append(x); y_pts.append(y)
         
         curr_color = block_colors_final[i]
-        # 光暈層
         fig.add_trace(go.Scatter(x=x_pts, y=y_pts, mode='lines', line=dict(color=curr_color, width=18), opacity=0.25, hoverinfo='skip', showlegend=False))
-        # 實體層
         fig.add_trace(go.Scatter(x=x_pts, y=y_pts, mode='lines', line=dict(color=curr_color, width=6), opacity=1.0, hoverinfo='skip', showlegend=False))
 
-    # 4. 刻度 (配合 10 格)
-    TOTAL_TICKS = BLOCK_COUNT * 10 # 100 個小刻度
+    # 4. 刻度
+    TOTAL_TICKS = BLOCK_COUNT * 10 
     for d in range(TOTAL_TICKS + 1):
-        # 簡化刻度顯示：只畫區塊邊界和中間值 (每5小格畫一次)
         is_block_edge = (d % 10 == 0)
         if not is_block_edge and d % 2 != 0: continue 
 
@@ -1522,18 +1538,15 @@ def plot_wind_gauge_bias_driven(
         x1, y1 = get_xy_from_angle(0.96, angle)
         shapes.append(dict(type="line", x0=x0, y0=y0, x1=x1, y1=y1, line=dict(color=col, width=w), opacity=alpha, layer="below"))
 
-    # 5. 文字標籤 (調整位置以適配 4:2:4 比例)
+    # 5. 文字標籤
     def add_curved_label(txt, pct, color):
         angle = 180 - (pct / 100) * 180
         lx, ly = get_xy_from_angle(R_LABEL, angle)
         rot_angle = 90 - angle
         fig.add_annotation(x=lx, y=ly, text=txt, showarrow=False, font=dict(size=16, color=color, family="Arial", weight="bold"), textangle=rot_angle)
 
-    # 左側 (0~40%) 中心約在 20%
     add_curved_label("無風 / 陣風循環", 20, c_green_base)
-    # 中間 (40~60%) 中心在 50%
     add_curved_label("循環交界", 50, c_gray_base)
-    # 右側 (60~100%) 中心約在 80%
     add_curved_label("強風 / 亂流循環", 80, c_red_base)
 
     # 6. 雙指針
@@ -1568,16 +1581,19 @@ def plot_wind_gauge_bias_driven(
         arrow = "▲" if change > 0 else ("▼" if change < 0 else "")
         
         fig.add_annotation(
-            x=x_center, y=0.37, 
+            x=x_center, y=0.38, # 稍微上移
             text=f"● {title}", showarrow=False, 
-            font=dict(size=13, color=ptr_color, weight="bold")
+            font=dict(size=14, color=ptr_color, weight="bold")
         )
+        
+        # 【修改 2】加大中心數值字體 (22 -> 26)
         fig.add_annotation(
             x=x_center, y=0.22, 
             text=f"{price:,.0f}" if price > 1000 else f"{price:,.2f}", 
             showarrow=False, 
-            font=dict(size=22, color=p_color, family="Arial Black")
+            font=dict(size=26, color=p_color, family="Arial Black")
         )
+        
         fig.add_annotation(
             x=x_center, y=0.08, 
             text=f"{arrow} {abs(change):.2f} ({abs(pct):.2f}%)", 
@@ -1588,23 +1604,45 @@ def plot_wind_gauge_bias_driven(
     draw_market_info(-0.40, "加權指數", taiex_data, COLOR_TAIEX_PTR)
     draw_market_info(0.40, "櫃買指數", tpex_data, COLOR_TPEX_PTR)
 
-    # 底部資訊 (字體縮小以防跑版)
-    fig.add_annotation(x=-0.45, y=-0.08, text=f"{str(taiex_wind).strip()}", showarrow=False, font=dict(size=16, color=COLOR_TAIEX_PTR, weight="bold"))
-    fig.add_annotation(x=-0.45, y=-0.22, text=f"持續 {taiex_streak} 天", showarrow=False, font=dict(size=12, color="#FFFFFF"))
-    #fig.add_annotation(x=-0.45, y=-0.35, text=f"乖離 {taiex_bias}%", showarrow=False, font=dict(size=11, color="#666666"))
+    # --- 8. 底部資訊 (顯示動態循環文字) ---
+    # 【修改 3】調整底部文字位置與間距
+    
+    # 左側：加權
+    fig.add_annotation(
+        x=-0.45, y=-0.12, # 原本 -0.08 -> 下移至 -0.12
+        text=text_taiex_bottom,
+        showarrow=False, 
+        font=dict(size=16, color=COLOR_TAIEX_PTR)
+    )
+    fig.add_annotation(
+        x=-0.45, y=-0.25, # 原本 -0.22 -> 下移至 -0.25
+        text=f"持續 {taiex_streak} 天", 
+        showarrow=False, 
+        font=dict(size=13, color="#DDDDDD") # 字體加大一點，顏色調亮一點
+    )
 
-    fig.add_annotation(x=0.45, y=-0.08, text=f"{str(tpex_wind).strip()}", showarrow=False, font=dict(size=16, color=COLOR_TPEX_PTR, weight="bold"))
-    fig.add_annotation(x=0.45, y=-0.22, text=f"持續 {tpex_streak} 天", showarrow=False, font=dict(size=12, color="#FFFFFF"))
-    #fig.add_annotation(x=0.45, y=-0.35, text=f"乖離 {tpex_bias}%", showarrow=False, font=dict(size=11, color="#666666"))
+    # 右側：櫃買
+    fig.add_annotation(
+        x=0.45, y=-0.12, 
+        text=text_tpex_bottom, 
+        showarrow=False, 
+        font=dict(size=16, color=COLOR_TPEX_PTR)
+    )
+    fig.add_annotation(
+        x=0.45, y=-0.25, 
+        text=f"持續 {tpex_streak} 天", 
+        showarrow=False, 
+        font=dict(size=13, color="#DDDDDD")
+    )
 
-    # Layout (高度增加至 400 以容納底部文字，背景一致)
+    # Layout
     fig.update_layout(
         shapes=shapes,
         xaxis=dict(range=[-1.5, 1.5], visible=False, fixedrange=True),
         yaxis=dict(range=[-0.5, 1.3], visible=False, fixedrange=True),
         paper_bgcolor='#1a1a1a', 
         plot_bgcolor='#1a1a1a',
-        height=400, # 稍微加高
+        height=400,
         margin=dict(t=10, b=10, l=10, r=10),
         template='plotly_dark'
     )
@@ -1645,62 +1683,80 @@ def ai_analyze_v86(image):
     except Exception as e: return json.dumps({"error": str(e)})
 
 
-# --- [V2.2] 強壯版櫃買指數獲取 (官方 API -> YF Fast -> YF History) ---
-def get_tpex_robust():
-    # 初始化預設值
-    tpex_data = {'price': 0.0, 'change': 0.0, 'pct_change': 0.0}
+# --- [V2.3] 超強壯指數獲取 (官方API -> YF Fast -> YF 1分K -> YF 日K) ---
+def get_index_live_data(symbol, official_key=None):
+    """
+    通用指數抓取函式，支援櫃買(^TWOII)與加權(^TWII)。
+    優先順序: 官方MIS -> YF FastInfo -> YF 1分K(即時) -> YF 日K(昨收)
+    """
+    # 預設回傳
+    result = {'price': 0.0, 'change': 0.0, 'pct_change': 0.0}
     
-    # ---------------------------------------
-    # 策略 1: 官方 API (最準，但雲端易被擋)
-    # ---------------------------------------
-    try:
-        official_data = fetch_official_tw_index_data()
-        if "^TWOII" in official_data:
-            # 檢查數據是否有效 (非 0)
-            if official_data["^TWOII"]['price'] > 0:
-                return official_data["^TWOII"]
-    except Exception:
-        pass
+    # 1. 優先嘗試官方 API (最準，但雲端易被擋)
+    if official_key:
+        try:
+            official_data = fetch_official_tw_index_data()
+            if official_key in official_data:
+                data = official_data[official_key]
+                if data['price'] > 0:
+                    return data
+        except Exception: pass
 
-    # ---------------------------------------
-    # 策略 2: Yahoo Finance (終極備援)
-    # ---------------------------------------
+    # 2. Yahoo Finance 救援機制
     try:
-        # 使用 ^TWOII (櫃買指數代號)
-        ticker = yf.Ticker("^TWOII")
+        ticker = yf.Ticker(symbol)
         
-        # 【關鍵修正】改用 history 抓取最近 5 天資料
-        # fast_info 在雲端有時會失效，但 history 幾乎都能拿到表格
-        df = ticker.history(period="5d")
+        # 步驟 A: 嘗試取得「日K」(Daily) 判斷趨勢
+        df_daily = ticker.history(period="5d")
         
-        if not df.empty:
-            # 取得最後一筆收盤價 (即時價或昨日收盤)
-            last_price = float(df['Close'].iloc[-1])
+        if not df_daily.empty:
+            # 取得日線最後一筆
+            daily_last_price = float(df_daily['Close'].iloc[-1])
+            # 取得前一日收盤 (用於計算漲跌)
+            # 如果最後一筆是今天(盤中)，prev_close 就是 iloc[-2]
+            # 如果最後一筆是昨天(盤後)，prev_close 也是 iloc[-2]... 這裡有陷阱
             
-            # 嘗試取得前一筆收盤價來計算漲跌
-            if len(df) >= 2:
-                prev_close = float(df['Close'].iloc[-2])
+            # 判斷最後一筆資料的日期
+            last_date = df_daily.index[-1].date()
+            today_date = datetime.now(pytz.timezone('Asia/Taipei')).date()
+            
+            # 如果日線最後一筆「不是今天」(代表 YF 日線還沒更新今天的 K 棒)
+            # 或者是今天但我們想確認更即時的價格 -> 嘗試抓「1分K」
+            is_stale = (last_date < today_date)
+            
+            real_time_price = None
+            
+            # 步驟 B: 嘗試抓「1分K」補救即時價格 (只抓最近 1 天)
+            try:
+                df_intra = ticker.history(period="1d", interval="1m")
+                if not df_intra.empty:
+                    real_time_price = float(df_intra['Close'].iloc[-1])
+            except: pass
+            
+            # 決定最終使用的價格 (Current Price)
+            # 如果有抓到分鐘盤，且日線是舊的，就用分鐘盤價格
+            if real_time_price and is_stale:
+                final_price = real_time_price
+                # 既然日線是舊的(昨天)，那日線的最後一筆(iloc[-1])其實就是「昨收」
+                prev_close = daily_last_price
             else:
-                # 如果只有一筆資料，嘗試從 info 抓昨收，若無則設為相同
-                prev_close = ticker.info.get('previousClose', last_price)
-            
-            # 防止昨收為 0
-            if prev_close <= 0: prev_close = last_price
+                # 如果日線已經是今天，或者抓不到分鐘盤，就信任日線
+                final_price = daily_last_price
+                if len(df_daily) >= 2:
+                    prev_close = float(df_daily['Close'].iloc[-2])
+                else:
+                    prev_close = ticker.info.get('previousClose', final_price)
 
-            change = last_price - prev_close
-            pct_change = (change / prev_close) * 100
-            
-            tpex_data = {
-                'price': last_price,
-                'change': change,
-                'pct_change': pct_change
-            }
-            return tpex_data
+            # 計算漲跌
+            if prev_close > 0:
+                change = final_price - prev_close
+                pct_change = (change / prev_close) * 100
+                return {'price': final_price, 'change': change, 'pct_change': pct_change}
             
     except Exception as e:
-        print(f"TPEx Fallback Error: {e}")
+        print(f"Index Fallback Error ({symbol}): {e}")
 
-    return tpex_data
+    return result
 
 # ---計算指定月份的個股平均成交值
 
@@ -2056,11 +2112,17 @@ def show_dashboard():
     wind_status = day_data['wind']
     wind_streak = calculate_wind_streak(df, selected_date)
     
-    # 1. 獲取即時數據 (櫃買 & 加權)
-    tpex_info = get_tpex_robust()
+    # 【修改】改用新的通用函式獲取數據 (含即時修正邏輯)
     
-    # 加權指數 (TAIEX) 抓取邏輯 (確保有定義 taiex 變數)
-    taiex = {'price': 0, 'change': 0, 'pct_change': 0}
+    # 1. 獲取 櫃買指數 (TPEx)
+    # 傳入代號 ^TWOII 以及官方 API 的對應鍵值 ^TWOII
+    tpex_info = get_index_live_data("^TWOII", "^TWOII")
+    
+    # 2. 獲取 加權指數 (TAIEX)
+    # 傳入代號 ^TWII 以及官方 API 的對應鍵值 ^TWII (如果有對應的話，原本程式碼官方API好像有抓t00)
+    # 註：fetch_official_tw_index_data 裡面有寫 ticker_key = "^TWII"
+    taiex = get_index_live_data("^TWII", "^TWII")
+
     try:
         twii = yf.Ticker("^TWII") 
         hist = twii.history(period="5d")
