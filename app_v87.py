@@ -2265,8 +2265,8 @@ def show_dashboard():
     st.markdown("---")
 
     with tab4:
-        st.subheader("📅 每月風度統計 (歷史大數據)")
-        st.caption("資料來源：後台歷史檔案。採用「立體堆疊柱狀圖」呈現，可直觀看出每月風度佔比。")
+        st.subheader("📅 每月風度統計 (含漲跌幅趨勢)")
+        st.caption("資料來源：後台歷史檔案。柱狀圖顯示風度天數(左軸)，折線圖顯示該月漲跌幅(右軸)。")
         
         # 1. 市場選擇
         stat_market = st.radio(
@@ -2292,6 +2292,16 @@ def show_dashboard():
             if not all_months:
                 st.warning("⚠️ 歷史資料中沒有月份資訊。")
             else:
+                # --- A. 預先計算全歷史的月漲跌幅 ---
+                monthly_return_series = pd.Series(dtype=float)
+                if '收' in hist_df_stat.columns:
+                    # 確保按日期排序
+                    hist_sorted = hist_df_stat.sort_values('日期')
+                    # 取每個月最後一天的收盤價
+                    monthly_close = hist_sorted.groupby('Month')['收'].last()
+                    # 計算漲跌幅 (%)：(本月收 - 上月收) / 上月收
+                    monthly_return_series = monthly_close.pct_change() * 100
+                
                 # 4. 時間軸滑桿
                 default_end_idx = len(all_months) - 1
                 default_start_idx = max(0, default_end_idx - 5)
@@ -2308,98 +2318,137 @@ def show_dashboard():
                 filtered_df = hist_df_stat.loc[mask]
                 monthly_counts = filtered_df.groupby(['Month', 'wind_clean']).size().reset_index(name='count')
                 
-		# 6. 繪製優化版圖表 (含數值標籤)
-                # 固定順序：無風 -> 陣風 -> 亂流 -> 強風 (由下往上堆疊，或由左至右)
+                # 【關鍵修正 1】確保柱狀圖數據也是排序過的 (雖然 groupby 通常會排，但保險起見)
+                monthly_counts = monthly_counts.sort_values('Month')
+
+                # 6. 繪製圖表 (雙軸)
                 wind_types = ['無風', '陣風', '亂流', '強風']
                 color_map = {'無風': '#2ecc71', '陣風': '#f1c40f', '亂流': '#9b59b6', '強風': '#e74c3c'}
                 
                 fig = go.Figure()
                 
+                # --- 柱狀圖 (左軸) ---
                 for w_type in wind_types:
                     sub_df = monthly_counts[monthly_counts['wind_clean'] == w_type]
                     
                     if not sub_df.empty:
-                        # 【優化】智慧文字顏色：黃色背景用黑字，其他用白字
                         text_color = '#000000' if w_type == '陣風' else '#FFFFFF'
-                        
                         fig.add_trace(go.Bar(
                             x=sub_df['Month'], 
                             y=sub_df['count'], 
                             name=w_type, 
                             marker=dict(
                                 color=color_map.get(w_type, '#333'),
-                                line=dict(color='rgba(255, 255, 255, 0.9)', width=2) # 白色邊框維持立體感
+                                line=dict(color='rgba(255, 255, 255, 0.9)', width=2)
                             ),
-                            # 【新增】數值標籤設定
-                            text=sub_df['count'],       # 顯示天數
-                            textposition='inside',      # 強制在柱子內部
-                            insidetextanchor='middle',  # 垂直置中
-                            textfont=dict(
-                                color=text_color,       # 智慧配色
-                                size=14,                # 字體大小
-                                weight='bold',
-                                family="Arial"
-                            ),
+                            text=sub_df['count'],
+                            textposition='inside',
+                            insidetextanchor='middle',
+                            textfont=dict(color=text_color, size=14, weight='bold', family="Arial"),
                             hovertemplate=f"<b>{w_type}</b><br>天數: %{{y}}<extra></extra>",
                             opacity=1.0 
                         ))
-                
-		# 【關鍵修改 2】版面設定優化 (文字顏色修復版)
+
+                # --- 折線圖 (右軸) ---
+                if not monthly_return_series.empty:
+                    display_months = sorted(filtered_df['Month'].unique())
+                    valid_data = monthly_return_series[monthly_return_series.index.isin(display_months)]
+                    
+                    # 【關鍵修正 2】強制對 Series 依照索引 (月份) 進行排序
+                    # 這能解決折線圖「往回畫」或亂跳的問題
+                    valid_data = valid_data.sort_index()
+                    
+                    if not valid_data.empty:
+                        point_colors = ['#e74c3c' if v >= 0 else '#27ae60' for v in valid_data.values]
+                        
+                        fig.add_trace(go.Scatter(
+                            x=valid_data.index,
+                            y=valid_data.values,
+                            name='月漲跌幅',
+                            yaxis='y2', 
+                            mode='lines+markers+text', 
+                            line=dict(
+                                color='#2980b9', 
+                                width=4, 
+                                shape='spline', 
+                                smoothing=0.5   # 降低平滑度，避免在數據少時曲線過度扭曲
+                            ),
+                            marker=dict(
+                                size=10, 
+                                color=point_colors, 
+                                line=dict(color='white', width=2),
+                                symbol='circle'
+                            ),
+                            text=[f"{v:+.1f}%" for v in valid_data.values],
+                            textposition="top center", 
+                            textfont=dict(size=13, weight='bold', color='#2980b9'),
+                            hovertemplate="<b>%{x}</b><br>漲跌幅: %{y:.2f}%<extra></extra>"
+                        ))
+
+                # 7. 版面設定
                 fig.update_layout(
                     title=dict(
-                        text=f"📊 {stat_market} 風度結構圖 ({start_month} ~ {end_month})", 
-                        font=dict(size=20, weight='bold', color='#000000') # 【修復】標題強制全黑
+                        text=f"📊 {stat_market} 風度結構與漲跌趨勢", 
+                        font=dict(size=20, weight='bold', color='#000000')
                     ),
                     barmode='stack', 
-                    height=500,
-                    
-                    # 【修復】設定全域字體顏色為黑色，防止漏網之魚
+                    height=550, 
                     font=dict(family="Arial, sans-serif", color='#000000'),
                     
                     # X 軸設定
                     xaxis=dict(
-                        title=dict(text="月份", font=dict(size=16, color='#000000', weight='bold')), # 【修復】軸標題全黑
+                        title=dict(text="月份", font=dict(size=16, color='#000000', weight='bold')),
                         type='category', 
-                        tickfont=dict(size=14, weight='bold', color='#000000'), # 【修復】刻度文字(日期)全黑
-                        showgrid=False 
+                        # 【關鍵修正 3】強制 X 軸依照類別名稱(日期字串)由小到大排序
+                        # 這能確保即使數據順序錯了，Plotly 也會幫你排好
+                        categoryorder='category ascending', 
+                        tickfont=dict(size=14, weight='bold', color='#000000'),
+                        showgrid=False
                     ),
                     
-                    # Y 軸設定
+                    # 左 Y 軸
                     yaxis=dict(
-                        title=dict(text="天數 (總交易日)", font=dict(size=16, color='#000000', weight='bold')), # 【修復】軸標題全黑
-                        tickfont=dict(size=14, weight='bold', color='#000000'), # 【修復】刻度文字(數字)全黑
+                        title=dict(text="天數 (總交易日)", font=dict(size=16, color='#000000', weight='bold')),
+                        tickfont=dict(size=14, weight='bold', color='#000000'),
                         gridcolor='#EEEEEE', 
                         zeroline=False
                     ),
                     
-                    # 圖例 (Legend) 設定
-                    legend=dict(
-                        orientation="h",      
-                        yanchor="bottom", y=1.02, 
-                        xanchor="right", x=1,     
-                        bgcolor="rgba(255, 255, 255, 0.9)", 
-                        bordercolor="#CCCCCC", 
-                        borderwidth=1,         
-                        font=dict(size=14, color="#000000"), # 【修復】圖例文字全黑
-                        itemsizing='constant'
+                    # 右 Y 軸
+                    yaxis2=dict(
+                        title=dict(text="月漲跌幅 (%)", font=dict(size=16, color='#2980b9', weight='bold')),
+                        tickfont=dict(size=14, weight='bold', color='#2980b9'),
+                        overlaying='y',  
+                        side='right',    
+                        showgrid=False,  
+                        zeroline=True,   
+                        zerolinecolor='rgba(0,0,0,0.2)'
                     ),
                     
-                    margin=dict(l=20, r=20, t=80, b=20),
-                    paper_bgcolor='white', 
-                    plot_bgcolor='white'
+                    legend=dict(
+                        orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,     
+                        bgcolor="rgba(255, 255, 255, 0.9)", bordercolor="#CCCCCC", borderwidth=1,         
+                        font=dict(size=14, color="#000000"), itemsizing='constant'
+                    ),
+                    margin=dict(l=20, r=20, t=80, b=30),
+                    paper_bgcolor='white', plot_bgcolor='white'
                 )
                 
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # 7. 詳細數據表格
+                # 8. 詳細數據表格
                 with st.expander("📄 查看詳細數據表格"):
                     pivot_df = monthly_counts.pivot(index='Month', columns='wind_clean', values='count').fillna(0).astype(int)
-                    # 加入總計欄位
-                    pivot_df['總計天數'] = pivot_df.sum(axis=1)
-                    # 重新排序欄位
-                    cols_order = [c for c in wind_types if c in pivot_df.columns] + ['總計天數']
-                    pivot_df = pivot_df[cols_order]
-                    st.dataframe(pivot_df, use_container_width=True)
+                    if not monthly_return_series.empty:
+                        ret_df = monthly_return_series.to_frame(name='漲跌幅(%)').round(2)
+                        pivot_df = pivot_df.join(ret_df, how='left')
+                    
+                    pivot_df['總計天數'] = pivot_df[[c for c in wind_types if c in pivot_df.columns]].sum(axis=1)
+                    cols_order = [c for c in wind_types if c in pivot_df.columns] + ['總計天數', '漲跌幅(%)']
+                    cols_order = [c for c in cols_order if c in pivot_df.columns]
+                    
+                    # 表格也順便排序一下
+                    st.dataframe(pivot_df[cols_order].sort_index(), use_container_width=True)
 
         else:
             st.warning(f"⚠️ 找不到 {stat_market} 的歷史資料，請先至「⚙️ 資料管理後台」上傳對應的 CSV 檔。")
