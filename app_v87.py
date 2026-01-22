@@ -1520,22 +1520,22 @@ def calculate_monthly_stats(df):
 import math
 import plotly.graph_objects as go
 
-# --- [V6.0] 策略型風度儀表板 (Strategy-Driven Wind Gauge) ---
+# --- [V6.0] 戰術型風度儀表板 (Tactical Strategy Gauge) ---
 def plot_wind_gauge_bias_driven(
     taiex_wind, taiex_streak, taiex_bias,
     tpex_wind, tpex_streak, tpex_bias,
     taiex_data, tpex_data
 ):
-    # 1. 基礎配置 (維持 10 格設計)
+    # 1. 基礎配置
     BLOCK_COUNT = 10
     BLOCK_WIDTH = 100 / BLOCK_COUNT
     
     # --- 顏色定義 (台股紅漲綠跌邏輯) ---
-    # 綠色 (左側/逆勢)
+    # 左側 (逆勢/保守) - 綠色系
     c_green_list = ['#2E8B57', '#3CB371', '#66CDAA', '#8FBC8F'] 
-    # 灰色 (中間/震盪)
-    c_gray_list  = ['#546E7A', '#90A4AE']
-    # 紅色 (右側/順勢)
+    # 中間 (震盪/觀察) - 灰色系
+    c_gray_list  = ['#546E7A', '#78909C']
+    # 右側 (順勢/積極) - 紅色系
     c_red_list   = ['#FF8A80', '#FF5252', '#FF1744', '#D50000']
     
     block_colors_final = c_green_list + c_gray_list + c_red_list
@@ -1545,8 +1545,8 @@ def plot_wind_gauge_bias_driven(
     c_gray_base  = '#95a5a6'
     c_red_base   = '#e74c3c'
     
-    COLOR_TAIEX_PTR = "#29B6F6"  # 淺藍指針
-    COLOR_TPEX_PTR  = "#FFA726"  # 橘黃指針
+    COLOR_TAIEX_PTR = "#29B6F6"  # 淺藍 (加權)
+    COLOR_TPEX_PTR  = "#FFA726"  # 橘黃 (櫃買)
 
     # --- 計算分數邏輯 (維持不變) ---
     def calc_score(bias_rate, streak_days):
@@ -1563,6 +1563,7 @@ def plot_wind_gauge_bias_driven(
         else:                            target_block = 9
         
         base_score = target_block * BLOCK_WIDTH
+        # 加分項：天數越多，分數微幅增加 (最多加一格)
         capped_days = min(streak_days, 10)
         days_offset = (capped_days / 10.0) * BLOCK_WIDTH
         score = base_score + days_offset
@@ -1571,22 +1572,47 @@ def plot_wind_gauge_bias_driven(
     score_taiex = calc_score(taiex_bias, taiex_streak)
     score_tpex  = calc_score(tpex_bias, tpex_streak)
 
-    # --- 【新增】根據分數判斷目前的「操作策略」文字 ---
-    def get_strategy_text(score):
-        # 0-40分: 左側 (無風/陣風)
-        if score < 40:
-            return "🛡️ <b>保守觀望</b><br><span style='font-size:14px'>趨勢向下｜勝率低｜多做多賠</span>", "#2ecc71"
-        # 40-60分: 中間 (交界)
-        elif score < 60:
-            return "⚖️ <b>區間震盪</b><br><span style='font-size:14px'>方向未明｜延續性差｜短進短出</span>", "#95a5a6"
-        # 60-100分: 右側 (強風/亂流)
-        else:
-            return "🚀 <b>積極操作</b><br><span style='font-size:14px'>趨勢向上｜勝率最高｜順勢而為</span>", "#e74c3c"
+    # --- 【核心修改】戰術策略判斷邏輯 ---
+    # 根據 bias (乖離率) 來決定顯示什麼建議
+    # 邏輯對應：
+    # 1. 強風/亂流 (> 0.5) -> 積極操作
+    # 2. 無風/陣風 (<= 0.5) -> 保守/試單
+    # 3. 循環交界 (-1 ~ 1) -> 震盪/黏著
+    
+    def get_strategy_card(bias_val, wind_str):
+        clean_wind = str(wind_str).strip()
+        
+        # A. 循環交界 (黏著區) - 優先判斷
+        # 當乖離率在 -1% ~ 1% 之間，代表均線糾結，方向不明
+        if -1.0 <= bias_val <= 1.0:
+            return "🌪️ <b>循環交界｜區間震盪</b><br><span style='font-size:14px; opacity:0.8'>多空拉鋸，延續性差，區間操作</span>", "#95a5a6" # 灰色
 
-    # 取得加權與櫃買的策略建議 (以分數較高者或主要參考者為主，這裡範例分開顯示)
-    # 為了版面簡潔，我們只顯示「目前分數較高/較強勢」的那一個市場的策略，或是綜合顯示
-    avg_score = (score_taiex + score_tpex) / 2
-    strategy_main_title, strategy_color = get_strategy_text(avg_score)
+        # B. 積極操作區 (趨勢向上)
+        # 強風 (>2) 或 亂流 (>0.5)
+        elif bias_val > 1.0:
+            if "強風" in clean_wind:
+                return "🚀 <b>強風主昇｜積極操作</b><br><span style='font-size:14px; opacity:0.8'>趨勢強勁，勝率最高，順勢擴大部位</span>", "#e74c3c" # 紅色
+            else: # 亂流
+                return "🌊 <b>亂流盤堅｜偏多操作</b><br><span style='font-size:14px; opacity:0.8'>多頭架構，震盪向上，拉回找買點</span>", "#e74c3c"
+
+        # C. 保守/試單區 (趨勢向下/反彈)
+        # 無風 (-2 ~ 0.5) 或 陣風 (<-2)
+        else: # bias_val < -1.0
+            if "陣風" in clean_wind: # 您提到「無風轉陣風...小小試單」
+                # 這裡假設陣風是深跌後的反彈或是起風的訊號
+                return "🌱 <b>起風訊號｜小量試單</b><br><span style='font-size:14px; opacity:0.8'>乖離過大或轉折浮現，嚴設停損試單</span>", "#2ecc71" # 綠色
+            else: # 無風
+                return "🛡️ <b>無風盤整｜保守觀望</b><br><span style='font-size:14px; opacity:0.8'>趨勢向下，動能不足，多做多賠</span>", "#2ecc71"
+
+    # 我們以「目前較強勢」或「平均狀況」來顯示主要的策略建議
+    # 這裡選擇顯示「加權」與「櫃買」中 bias 較高(較強) 的那個，或者您可以選擇只看櫃買
+    # 為了資訊完整，我們在圖表下方分別顯示文字，但中央大標題顯示「綜合建議」
+    
+    # 綜合判斷：取兩者平均 bias 來決定大方向
+    avg_bias = (taiex_bias + tpex_bias) / 2
+    avg_wind = tpex_wind if tpex_bias > taiex_bias else taiex_wind # 取強者名稱
+    
+    strategy_title, strategy_color = get_strategy_card(avg_bias, avg_wind)
 
     # --- 繪圖 ---
     fig = go.Figure()
@@ -1597,15 +1623,13 @@ def plot_wind_gauge_bias_driven(
     R_TICK_IN = 0.88       
     R_CURSOR_TIP = 0.82    
     R_CURSOR_BASE = 0.72   
-    R_LABEL = 1.25         # 文字離圓心距離
+    R_LABEL = 1.25
     
     def get_xy_from_angle(r, angle_deg):
         rad = math.radians(angle_deg)
         return r * math.cos(rad), r * math.sin(rad)
 
-    shapes = []
-
-    # 1. 色塊與外環
+    # 1. 繪製色塊與外框
     ring_x, ring_y = [], []
     for s in range(181):
         rx, ry = get_xy_from_angle(R_OUTER_RING, 180 - s)
@@ -1627,7 +1651,9 @@ def plot_wind_gauge_bias_driven(
             x_pts.append(x); y_pts.append(y)
         
         curr_color = block_colors_final[i]
+        # 半透明底色
         fig.add_trace(go.Scatter(x=x_pts, y=y_pts, mode='lines', line=dict(color=curr_color, width=18), opacity=0.3, hoverinfo='skip', showlegend=False))
+        # 實心外緣
         fig.add_trace(go.Scatter(x=x_pts, y=y_pts, mode='lines', line=dict(color=curr_color, width=6), opacity=1.0, hoverinfo='skip', showlegend=False))
 
     # 2. 刻度線
@@ -1643,24 +1669,25 @@ def plot_wind_gauge_bias_driven(
         else: r_in = R_TICK_IN; w = 1; alpha = 0.5; col = t_col
         x0, y0 = get_xy_from_angle(r_in, angle)
         x1, y1 = get_xy_from_angle(0.96, angle)
-        shapes.append(dict(type="line", x0=x0, y0=y0, x1=x1, y1=y1, line=dict(color=col, width=w), opacity=alpha, layer="below"))
+        shapes = []
+        fig.add_shape(type="line", x0=x0, y0=y0, x1=x1, y1=y1, line=dict(color=col, width=w), opacity=alpha, layer="below")
 
-    # 3. 【修改】弧形文字標籤：加上勝率/操作提示
+    # 3. 弧形文字標籤 (修改為戰術指導)
     def add_curved_label(txt, sub_txt, pct, color):
         angle = 180 - (pct / 100) * 180
         lx, ly = get_xy_from_angle(R_LABEL, angle)
         rot_angle = 90 - angle
         # 主標題
         fig.add_annotation(x=lx, y=ly, text=txt, showarrow=False, font=dict(size=15, color=color, family="Microsoft JhengHei", weight="bold"), textangle=rot_angle, yshift=10)
-        # 副標題 (勝率/趨勢)
+        # 副標題
         fig.add_annotation(x=lx, y=ly, text=sub_txt, showarrow=False, font=dict(size=11, color="#AAAAAA", family="Microsoft JhengHei"), textangle=rot_angle, yshift=-10)
 
-    # 左側
-    add_curved_label("無風 / 陣風", "逆勢｜勝率低", 20, c_green_base)
-    # 中間
-    add_curved_label("循環交界", "震盪｜延續差", 50, c_gray_base)
-    # 右側
-    add_curved_label("強風 / 亂流", "順勢｜勝率高", 80, c_red_base)
+    # 左側：保守區
+    add_curved_label("保守 / 試單", "無風｜陣風", 20, c_green_base)
+    # 中間：交界區
+    add_curved_label("震盪 / 觀察", "循環交界", 50, c_gray_base)
+    # 右側：積極區
+    add_curved_label("積極 / 順勢", "強風｜亂流", 80, c_red_base)
 
     # 4. 雙指針
     def draw_pointer(score, color, label):
@@ -1675,7 +1702,7 @@ def plot_wind_gauge_bias_driven(
     draw_pointer(score_tpex, COLOR_TPEX_PTR, "櫃買")
     draw_pointer(score_taiex, COLOR_TAIEX_PTR, "加權")
 
-    # 5. 中心指數資訊 (稍微上移)
+    # 5. 中心指數資訊
     def draw_market_info(x_center, title, data_dict, ptr_color):
         price = data_dict.get('price', 0)
         change = data_dict.get('change', 0)
@@ -1690,37 +1717,35 @@ def plot_wind_gauge_bias_driven(
     draw_market_info(-0.40, "加權指數", taiex_data, COLOR_TAIEX_PTR)
     draw_market_info(0.40, "櫃買指數", tpex_data, COLOR_TPEX_PTR)
 
-    # 6. 【新增】底部策略總結 (最重要的修改)
-    # 在原本顯示天數的地方，改為顯示「操作建議」
-    
+    # 6. 【新增】底部戰術看板 (Tactical Board)
+    # 畫一條分隔線
     fig.add_shape(type="line", x0=-0.8, y0=0.05, x1=0.8, y1=0.05, line=dict(color="#333333", width=1, dash="dot"), layer="below")
     
-    # 策略標題 (置中)
+    # 顯示戰術建議 (置中、醒目)
     fig.add_annotation(
-        x=0, y=-0.15,
-        text=strategy_main_title,
+        x=0, y=-0.18,
+        text=strategy_title,
         showarrow=False,
-        font=dict(size=20, color=strategy_color, family="Microsoft JhengHei"),
+        font=dict(size=18, color=strategy_color, family="Microsoft JhengHei"),
         align="center",
-        bgcolor="rgba(0,0,0,0.5)", # 半透明背景增加對比
+        bgcolor="rgba(20, 20, 20, 0.8)", # 深色半透明背景，增加對比
         bordercolor=strategy_color,
         borderwidth=2,
-        borderpad=10,
-        opacity=0.9
+        borderpad=12,
+        opacity=1.0
     )
 
-    # 底部顯示風度狀態 (小字)
-    fig.add_annotation(x=-0.5, y=-0.45, text=f"加權: {taiex_wind} ({taiex_streak}天)", showarrow=False, font=dict(size=12, color=COLOR_TAIEX_PTR))
-    fig.add_annotation(x=0.5, y=-0.45, text=f"櫃買: {tpex_wind} ({tpex_streak}天)", showarrow=False, font=dict(size=12, color=COLOR_TPEX_PTR))
+    # 底部角落顯示個別狀態
+    fig.add_annotation(x=-0.5, y=-0.45, text=f"加權: {taiex_wind}", showarrow=False, font=dict(size=12, color=COLOR_TAIEX_PTR))
+    fig.add_annotation(x=0.5, y=-0.45, text=f"櫃買: {tpex_wind}", showarrow=False, font=dict(size=12, color=COLOR_TPEX_PTR))
 
     # Layout 設定
     fig.update_layout(
-        shapes=shapes,
         xaxis=dict(range=[-1.5, 1.5], visible=False, fixedrange=True),
         yaxis=dict(range=[-0.5, 1.3], visible=False, fixedrange=True),
         paper_bgcolor='#1a1a1a', 
         plot_bgcolor='#1a1a1a',
-        height=420, # 稍微加高以容納底部文字
+        height=420, 
         margin=dict(t=30, b=10, l=10, r=10),
         template='plotly_dark'
     )
@@ -2922,6 +2947,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
