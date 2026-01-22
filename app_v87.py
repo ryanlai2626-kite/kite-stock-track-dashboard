@@ -2142,8 +2142,7 @@ def show_dashboard():
     st.markdown("### 🌬️ 每日風度與風箏數")
 
     wind_status = day_data['wind']
-    wind_streak = calculate_wind_streak(df, selected_date)
-    
+	
     # 【修改】改用新的通用函式獲取數據 (含即時修正邏輯)
     
     # 1. 獲取 櫃買指數 (TPEx)
@@ -2229,9 +2228,6 @@ def show_dashboard():
             tpex_w_status, tpex_w_streak, tpex_w_bias, tpex_w_prev,
             taiex_info, tpex_info
         )
-        st.markdown('<div style="background-color:#1a1a1a; border-radius:20px; padding:10px; box-shadow:0 8px 16px rgba(0,0,0,0.2);">', unsafe_allow_html=True)
-        st.plotly_chart(gauge_fig, use_container_width=True, height=380, config={'displayModeBar': False, 'responsive': True}, key="main_gauge")
-        st.markdown('</div>', unsafe_allow_html=True)
         
         # 加強儀表板外框質感
         st.markdown('<div style="background-color:#1a1a1a; border-radius:20px; padding:10px; box-shadow:0 8px 16px rgba(0,0,0,0.2);">', unsafe_allow_html=True)
@@ -2893,6 +2889,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
