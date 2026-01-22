@@ -2153,7 +2153,7 @@ def show_dashboard():
     # 2. 獲取 加權指數 (TAIEX)
     # 傳入代號 ^TWII 以及官方 API 的對應鍵值 ^TWII (如果有對應的話，原本程式碼官方API好像有抓t00)
     # 註：fetch_official_tw_index_data 裡面有寫 ticker_key = "^TWII"
-    taiex = get_index_live_data("^TWII", "^TWII")
+    taiex_info = get_index_live_data("^TWII", "^TWII")
 
     try:
         twii = yf.Ticker("^TWII") 
@@ -2893,6 +2893,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
