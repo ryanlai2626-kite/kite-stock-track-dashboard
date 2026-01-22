@@ -7,3 +7,5 @@ plotly
 requests
 lxml
 fake-useragent
+gspread
+oauth2client
