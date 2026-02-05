@@ -1524,10 +1524,10 @@ def calculate_monthly_stats(df):
 import math
 import plotly.graph_objects as go
 
-# --- [V6.0] 戰術型風度儀表板 (整合戰術規則版) ---
+# --- [V6.1] 戰術型風度儀表板 (修正 NameError 版) ---
 def plot_wind_gauge_bias_driven(
-    taiex_wind, taiex_streak, taiex_bias, taiex_prev_wind, # 新增: 前日風度
-    tpex_wind, tpex_streak, tpex_bias, tpex_prev_wind,     # 新增: 前日風度
+    taiex_wind, taiex_streak, taiex_bias, taiex_prev_wind,
+    tpex_wind, tpex_streak, tpex_bias, tpex_prev_wind,
     taiex_data, tpex_data
 ):
     # 1. 基礎配置
@@ -1543,7 +1543,7 @@ def plot_wind_gauge_bias_driven(
     c_green_base = '#2ecc71' 
     c_gray_base  = '#95a5a6'
     c_red_base   = '#e74c3c'
-    c_yellow_warn = '#f1c40f' # 警告色
+    c_yellow_warn = '#f1c40f' 
     
     COLOR_TAIEX_PTR = "#29B6F6"  # 淺藍
     COLOR_TPEX_PTR  = "#FFA726"  # 橘黃
@@ -1563,7 +1563,6 @@ def plot_wind_gauge_bias_driven(
         else:                            target_block = 9
         
         base_score = target_block * BLOCK_WIDTH
-        # 防呆
         try: s_days = int(streak_days)
         except: s_days = 1
         
@@ -1575,41 +1574,37 @@ def plot_wind_gauge_bias_driven(
     score_taiex = calc_score(taiex_bias, taiex_streak)
     score_tpex  = calc_score(tpex_bias, tpex_streak)
 
-    # --- 【核心修改】戰術策略判斷邏輯 (依據您的 4 點要求) ---
+    # --- 戰術策略判斷 ---
     def get_strategy_card(bias_val, wind_str, prev_wind_str):
         curr = str(wind_str).strip()
         prev = str(prev_wind_str).strip()
         
-        # 規則 4-1: 無風 -> 陣風 => 起風試單
-        # (昨天是無風，今天是陣風)
+        # 規則 4-1: 無風 -> 陣風
         if "無風" in prev and "陣風" in curr:
             return "🌱 起風訊號｜嘗試試單", "底部轉折浮現，可少量嘗試，嚴設停損", c_green_base
 
-        # 規則 4-2: 強風 -> 亂流 或 強風 -> 無風 => 轉為觀望
-        # (昨天是強風，但今天轉弱了)
+        # 規則 4-2: 強風 -> 轉弱
         if "強風" in prev and ("亂流" in curr or "無風" in curr or "陣風" in curr):
             return "⚠️ 趨勢轉弱｜轉為觀望", "原本上漲趨勢改變，停止積極操作，嚴守紀律", c_yellow_warn
 
-        # 規則 1: 強風/亂流 (且非轉弱狀態) => 積極操作
-        # 用 Bias 輔助判斷 (Bias > 0.5 通常是多頭)
+        # 規則 1: 強風/亂流 (積極)
         if bias_val > 0.5: 
             if "強風" in curr:
                 return "🚀 強風主昇｜積極操作", "趨勢強勁持續向上，勝率最高，順勢擴大部位", c_red_base
             else: # 亂流
                 return "🌊 亂流盤堅｜偏多操作", "多頭架構震盪向上，拉回找買點，嚴守策略", c_red_base
 
-        # 規則 3: 循環交界 (-1 ~ 0.5) => 震盪/黏著
+        # 規則 3: 循環交界 (震盪)
         elif -1.0 <= bias_val <= 0.5: 
             return "⚖️ 循環交界｜區間震盪", "多空拉鋸，方向不明，延續性差，多看少做", c_gray_base
 
-        # 規則 2: 無風/陣風 (且非起風狀態) => 保守/現金為王
-        else: # Bias < -1.0
+        # 規則 2: 無風/陣風 (保守)
+        else: 
             if "陣風" in curr: 
                 return "📉 陣風修正｜保守觀望", "乖離過大但趨勢仍空，搶反彈宜快進快出", c_green_base
             else: # 無風
                 return "🛡️ 無風盤跌｜現金為王", "趨勢向下，勝率極低，多做多賠，保留現金", c_green_base
 
-    # 決定顯示哪一個市場的策略 (優先顯示櫃買 TPEx，若無則顯示加權)
     if tpex_bias != 0:
         main_bias, main_wind, main_prev = tpex_bias, tpex_wind, tpex_prev_wind
     else:
@@ -1617,10 +1612,9 @@ def plot_wind_gauge_bias_driven(
         
     strat_title, strat_desc, strat_color = get_strategy_card(main_bias, main_wind, main_prev)
 
-    # --- 繪圖 (Plotly) ---
+    # --- 繪圖 ---
     fig = go.Figure()
 
-    # 幾何參數
     R_OUTER_RING = 1.08; R_MAIN_ARC = 1.00; R_TICK_IN = 0.88       
     R_CURSOR_TIP = 0.82; R_CURSOR_BASE = 0.72; R_LABEL = 1.25         
     
@@ -1628,13 +1622,14 @@ def plot_wind_gauge_bias_driven(
         rad = math.radians(angle_deg)
         return r * math.cos(rad), r * math.sin(rad)
 
-    # 外環與色塊 (維持原樣)
+    # 外環
     ring_x, ring_y = [], []
     for s in range(181):
         rx, ry = get_xy_from_angle(R_OUTER_RING, 180 - s)
         ring_x.append(rx); ring_y.append(ry)
     fig.add_trace(go.Scatter(x=ring_x, y=ring_y, mode='lines', line=dict(color='#444444', width=1), hoverinfo='skip', showlegend=False))
 
+    # 色塊
     for i in range(BLOCK_COUNT):
         start_pct = i * BLOCK_WIDTH; end_pct = (i + 1) * BLOCK_WIDTH; gap = 0.5 
         start_angle = 180 - (start_pct/100*180) - (0 if i==0 else gap)
@@ -1651,7 +1646,7 @@ def plot_wind_gauge_bias_driven(
         fig.add_trace(go.Scatter(x=x_pts, y=y_pts, mode='lines', line=dict(color=curr_color, width=18), opacity=0.25, hoverinfo='skip', showlegend=False))
         fig.add_trace(go.Scatter(x=x_pts, y=y_pts, mode='lines', line=dict(color=curr_color, width=6), opacity=1.0, hoverinfo='skip', showlegend=False))
 
-    # 弧形文字 (依照您的分區規則修改)
+    # 文字
     def add_curved_label(txt, pct, color):
         angle = 180 - (pct / 100) * 180
         lx, ly = get_xy_from_angle(R_LABEL, angle)
@@ -1662,7 +1657,7 @@ def plot_wind_gauge_bias_driven(
     add_curved_label("震盪 / 觀察", 50, c_gray_base)
     add_curved_label("積極 / 順勢", 80, c_red_base)
 
-    # 雙指針
+    # 雙指針 (修正變數名稱錯誤 base_cy -> base_y)
     def draw_pointer(score, color, label):
         ptr_angle = 180 - (score / 100) * 180
         rad = math.radians(ptr_angle)
@@ -1671,7 +1666,8 @@ def plot_wind_gauge_bias_driven(
         base_x, base_y = R_CURSOR_BASE * math.cos(rad), R_CURSOR_BASE * math.sin(rad)
         dx, dy = -math.sin(rad) * tri_w, math.cos(rad) * tri_w
         
-        fig.add_trace(go.Scatter(x=[tip_x, base_x+dx, base_x-dx, tip_x], y=[tip_y, base_cy+dy, base_cy-dy, tip_y], fill='toself', fillcolor=color, line=dict(color='#FFF', width=1.5), mode='lines', name=label, showlegend=False, hoverinfo='skip'))
+        # 修正點：這裡原本寫 base_cy，改為 base_y
+        fig.add_trace(go.Scatter(x=[tip_x, base_x+dx, base_x-dx, tip_x], y=[tip_y, base_y+dy, base_y-dy, tip_y], fill='toself', fillcolor=color, line=dict(color='#FFF', width=1.5), mode='lines', name=label, showlegend=False, hoverinfo='skip'))
         
     draw_pointer(score_tpex, COLOR_TPEX_PTR, "櫃買")
     draw_pointer(score_taiex, COLOR_TAIEX_PTR, "加權")
@@ -1688,10 +1684,9 @@ def plot_wind_gauge_bias_driven(
     draw_market_info(-0.40, "加權指數", taiex_data, COLOR_TAIEX_PTR)
     draw_market_info(0.40, "櫃買指數", tpex_data, COLOR_TPEX_PTR)
 
-    # 分隔線
+    # 戰術看板
     fig.add_shape(type="line", x0=-0.8, y0=0.05, x1=0.8, y1=0.05, line=dict(color="#333", width=1, dash="dot"), layer="below")
     
-    # 【新增】戰術看板 (顯示在儀表板下方)
     fig.add_annotation(
         x=0, y=-0.20,
         text=f"<b>{strat_title}</b><br><span style='font-size:14px; color:#ccc'>{strat_desc}</span>",
@@ -1704,7 +1699,7 @@ def plot_wind_gauge_bias_driven(
         borderpad=10
     )
     
-    # 底部狀態列
+    # 底部狀態
     fig.add_annotation(x=-0.5, y=-0.45, text=f"加權: {taiex_wind}", showarrow=False, font=dict(size=12, color=COLOR_TAIEX_PTR))
     fig.add_annotation(x=0.5, y=-0.45, text=f"櫃買: {tpex_wind}", showarrow=False, font=dict(size=12, color=COLOR_TPEX_PTR))
 
@@ -2903,5 +2898,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
