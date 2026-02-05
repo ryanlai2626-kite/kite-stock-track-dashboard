@@ -2078,7 +2078,7 @@ def render_cycle_analysis_ui(hist_df, index_name="上櫃指數"):
     st.plotly_chart(fig, use_container_width=True)
 
 
-# --- 5. 頁面視圖：戰情儀表板 (前台) [含重新整理按鈕版] ---
+# --- 5. 頁面視圖：戰情儀表板 (修正 KeyError: wind 版) ---
 def show_dashboard():
     df = load_db()
     if df.empty:
@@ -2096,18 +2096,13 @@ def show_dashboard():
         max_d = datetime.now().date()
         default_d = datetime.now().date()
 
-    # --- [修改 2] 雙重日期選擇 (側邊欄 + 主畫面) ---
-    # 為了讓前台更直覺，我們在主畫面頂部也放一個選擇器，並與側邊欄連動
-    
-    # 1. 側邊欄維持原樣 (作為全域導航)
+    # --- 雙重日期選擇 ---
     st.sidebar.divider()
     st.sidebar.header("📅 歷史回顧")
     
-    # 2. 主畫面頂部控制列
     col_date, col_refresh = st.columns([3, 1], vertical_alignment="bottom")
     
     with col_date:
-        # 這裡設定 label_visibility="collapsed" 讓介面更乾淨
         picked_dt = st.date_input(
             "📆 選擇戰情日期", 
             value=default_d, 
@@ -2119,11 +2114,9 @@ def show_dashboard():
     selected_date = picked_dt.strftime("%Y-%m-%d")
     
     with col_refresh:
-        # 定義 callback: 清除快取並重新執行
         def force_refresh():
-            get_global_market_data_with_chart.clear() # 清除市場數據快取
+            get_global_market_data_with_chart.clear()
             
-        # 按鈕：點擊後會觸發 force_refresh 清除快取，Streamlit 會自動 rerun
         st.button("🔄 手動即時更新", on_click=force_refresh, help="強制清除快取並抓取最新報價", type="primary", use_container_width=True)
 
     # --- 資料過濾 ---
@@ -2149,17 +2142,14 @@ def show_dashboard():
         if pd.isna(manual_json): manual_json = None
         turnover_map = prefetch_turnover_data(all_strategy_stocks, selected_date, manual_override_json=manual_json)
 
-
     # --- 標題區塊 ---
     st.markdown(f"""<div class="title-box"><h1 style='margin:0; font-size: 2.8rem;'>📅 {selected_date} 風箏市場戰情室</h1><p style='margin-top:10px; opacity:0.9;'>資料更新於: {day_data['last_updated']}</p></div>""", unsafe_allow_html=True)
 
-    # --- 下方內容保持不變 ---
     render_global_markets()
 
     with st.expander("📊 大盤指數走勢圖 (點擊展開)", expanded=False):
         col_m1, col_m2 = st.columns([1, 4])
         with col_m1:
-            # 修改這裡：加入 "比特幣", "乙太幣"
             market_type = st.radio("選擇市場", ["上市", "上櫃", "比特幣", "乙太幣"], horizontal=True)
             market_period = st.selectbox("週期", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=2, key="market_period")
         with col_m2:
@@ -2169,11 +2159,7 @@ def show_dashboard():
             
     st.divider()
 
-    # ... (以下其餘程式碼保持原樣: 每日風度、策略卡片、圖表分析等) ...
-    # 為了節省篇幅，請保留您原本 show_dashboard 函式中，st.divider() 之後的所有程式碼
-    # --- 接續原本的程式碼 ---
-    
-# --- V196: 每日風度與風箏數 (戰術升級版) ---
+    # --- V196: 每日風度與風箏數 (戰術升級修正版) ---
     st.markdown("### 🌬️ 每日風度與風箏數")
 
     # 1. 抓取即時指數
@@ -2185,23 +2171,34 @@ def show_dashboard():
     taiex_w_status = "無資料"
     taiex_w_streak = 0
     taiex_w_bias = 0.0
-    taiex_prev_wind = "無風" # 預設
+    taiex_prev_wind = "無風" 
 
     if not df_taiex.empty:
-        # 確保有日期並已排序 (由新到舊)
+        # 處理日期欄位
         if '日期' in df_taiex.columns:
             df_taiex['date'] = df_taiex['日期'].dt.strftime('%Y-%m-%d')
-            df_taiex = df_taiex.sort_values('date', ascending=False)
+        elif 'date' not in df_taiex.columns:
+            # 防呆：如果沒有日期也沒有date，建一個假的以免報錯
+            df_taiex['date'] = datetime.now().strftime('%Y-%m-%d')
+
+        # 【關鍵修正】處理風度欄位：建立 'wind' 欄位給 calculate_wind_streak 使用
+        if '風度' in df_taiex.columns:
+            df_taiex['wind'] = df_taiex['風度']
+        elif 'wind' not in df_taiex.columns:
+            df_taiex['wind'] = "無風" # 若完全沒欄位，給預設值
+
+        # 排序
+        df_taiex = df_taiex.sort_values('date', ascending=False)
             
-        latest_taiex = df_taiex.iloc[0] # 最新一筆
-        taiex_w_status = str(latest_taiex['風度']).strip()
+        latest_taiex = df_taiex.iloc[0] 
+        taiex_w_status = str(latest_taiex['wind']).strip() # 改抓 wind 欄位
         taiex_w_streak = calculate_wind_streak(df_taiex, latest_taiex['date'])
-        try: taiex_w_bias = float(str(latest_taiex['乖離率']).replace('%', '').strip())
+        try: taiex_w_bias = float(str(latest_taiex.get('乖離率', 0)).replace('%', '').strip())
         except: taiex_w_bias = 0.0
         
-        # 【關鍵】抓取前一筆 (Yesterday)
+        # 抓取前一筆 (Yesterday)
         if len(df_taiex) >= 2:
-            taiex_prev_wind = str(df_taiex.iloc[1]['風度']).strip()
+            taiex_prev_wind = str(df_taiex.iloc[1]['wind']).strip() # 改抓 wind 欄位
         else:
             taiex_prev_wind = taiex_w_status
 
@@ -2210,22 +2207,33 @@ def show_dashboard():
     tpex_w_status = "無資料"
     tpex_w_streak = 0
     tpex_w_bias = 0.0
-    tpex_prev_wind = "無風" # 預設
+    tpex_prev_wind = "無風"
     
     if not df_tpex.empty:
+        # 處理日期欄位
         if '日期' in df_tpex.columns:
             df_tpex['date'] = df_tpex['日期'].dt.strftime('%Y-%m-%d')
-            df_tpex = df_tpex.sort_values('date', ascending=False)
+        elif 'date' not in df_tpex.columns:
+            df_tpex['date'] = datetime.now().strftime('%Y-%m-%d')
+
+        # 【關鍵修正】處理風度欄位
+        if '風度' in df_tpex.columns:
+            df_tpex['wind'] = df_tpex['風度']
+        elif 'wind' not in df_tpex.columns:
+            df_tpex['wind'] = "無風"
+
+        # 排序
+        df_tpex = df_tpex.sort_values('date', ascending=False)
 
         latest_tpex = df_tpex.iloc[0]
-        tpex_w_status = str(latest_tpex['風度']).strip()
+        tpex_w_status = str(latest_tpex['wind']).strip()
         tpex_w_streak = calculate_wind_streak(df_tpex, latest_tpex['date'])
-        try: tpex_w_bias = float(str(latest_tpex['乖離率']).replace('%', '').strip())
+        try: tpex_w_bias = float(str(latest_tpex.get('乖離率', 0)).replace('%', '').strip())
         except: tpex_w_bias = 0.0
         
-        # 【關鍵】抓取前一筆 (Yesterday)
+        # 抓取前一筆
         if len(df_tpex) >= 2:
-            tpex_prev_wind = str(df_tpex.iloc[1]['風度']).strip()
+            tpex_prev_wind = str(df_tpex.iloc[1]['wind']).strip()
         else:
             tpex_prev_wind = tpex_w_status
 
@@ -2233,20 +2241,18 @@ def show_dashboard():
     col_gauge, col_cards = st.columns([4, 6], gap="large", vertical_alignment="center") 
     
     with col_gauge:
-        # 呼叫新的繪圖函式，傳入 prev_wind
+        # 呼叫新的繪圖函式
         gauge_fig = plot_wind_gauge_bias_driven(
             taiex_w_status, taiex_w_streak, taiex_w_bias, taiex_prev_wind,
             tpex_w_status, tpex_w_streak, tpex_w_bias, tpex_prev_wind,
             taiex_info, tpex_info
         )
         
-        # 加強儀表板外框質感
         st.markdown('<div style="background-color:#1a1a1a; border-radius:20px; padding:10px; box-shadow:0 8px 16px rgba(0,0,0,0.2);">', unsafe_allow_html=True)
         st.plotly_chart(gauge_fig, use_container_width=True, height=420, config={'displayModeBar': False, 'responsive': True}, key="main_gauge")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_cards:
-        # 優化卡片 CSS：增加高度、圓角與陰影，使其與左側儀表板視覺平衡
         st.markdown("""
         <style>
             div.kite-metrics-grid { 
@@ -2268,7 +2274,7 @@ def show_dashboard():
                 flex-direction: column; 
                 justify-content: center; 
                 align-items: center; 
-                height: 160px; /* 增加高度，讓視覺更穩重 */
+                height: 160px;
                 transition: transform 0.2s;
             }
             .kite-box:hover { transform: translateY(-5px); }
@@ -2294,9 +2300,6 @@ def show_dashboard():
         </div>
         """
         st.markdown(cards_html, unsafe_allow_html=True)
-    # --- 排版優化結束 ---
-
-
 
     st.markdown('<div class="strategy-banner worker-banner"><p class="banner-text">👨‍💼 上班族策略 (Worker Strategy)</p></div>', unsafe_allow_html=True)
     w1, w2 = st.columns(2)
@@ -2900,4 +2903,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
